@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30  # 设置超时时间为 30 分钟
     strategy:
+      fail-fast: false
       matrix:
         repo:
           - "facebook/facebook-ios-sdk"            # Facebook SDK
@@ -32,49 +33,23 @@ jobs:
       - name: Install dependencies
         run: |
           pip install requests
+      
+      # ✅ 4. 调试 Python 环境
+      - name: Verify Python and requests
+        run: |
+          python --version
+          pip show requests
 
-      # ✅ 4. 获取最新版本
+      # ✅ 5. 获取最新版本
       - name: Check for new release
         id: check-release
+        env:
+          REPO: ${{ matrix.repo }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
         run: |
-          import requests
-          import os
+          python check_release.py
 
-          REPO = "${{ matrix.repo }}"
-          API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
-
-          response = requests.get(API_URL)
-          if response.status_code != 200:
-              print(f"❌ 无法获取 {REPO} 的最新版本")
-              exit(1)
-
-          latest_version = response.json()['tag_name']
-          release_url = response.json()['html_url']
-
-          # 文件命名为仓库名，防止冲突
-          version_file = REPO.replace("/", "_") + "_latest_version.txt"
-
-          # 读取已保存的版本号
-          try:
-              with open(version_file, "r") as f:
-                  saved_version = f.read().strip()
-          except FileNotFoundError:
-              saved_version = None
-
-          if latest_version != saved_version:
-              with open(version_file, "w") as f:
-                  f.write(latest_version)
-              print(f"🎉 新版本发布: {latest_version} - {release_url}")
-
-              # 设置输出，供下一个步骤使用
-              with open(os.environ['GITHUB_ENV'], 'a') as env_file:
-                  env_file.write(f"NEW_VERSION={latest_version}\n")
-                  env_file.write(f"RELEASE_URL={release_url}\n")
-                  env_file.write(f"SDK={REPO}\n")
-          else:
-              print(f"✅ {REPO} 已是最新版本")
-
-      # ✅ 5. 发送 GitHub Actions 通知
+      # ✅ 6. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
         if: env.NEW_VERSION != ''
         run: |
@@ -82,7 +57,7 @@ jobs:
           echo "🔗 链接: ${{ env.RELEASE_URL }}"
           echo "📦 SDK: ${{ env.SDK }}"
 
-      # ✅ 6. 发送邮件通知（如果需要）
+      # ✅ 7. 发送邮件通知（如果需要）
       - name: Send Email Notification
         if: env.NEW_VERSION != ''
         env:
@@ -101,7 +76,7 @@ jobs:
             echo "❌ SMTP 未配置，跳过邮件发送"
           fi
 
-      # ✅ 发送 Telegram 通知
+      # ✅ 8. 发送 Telegram 通知
       - name: Send Telegram Notification
         if: env.NEW_VERSION != ''
         env:
@@ -116,3 +91,4 @@ jobs:
             echo "✅ Telegram 通知已发送"
           else
             echo "❌ Telegram Token 或 Chat ID 未配置"
+          fi
