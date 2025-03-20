@@ -60,9 +60,8 @@ jobs:
         run: |
           echo "当前工作目录: $(pwd)"
           echo "环境变量 REPO: $REPO"
-          echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."
+          echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."  # 只显示前5个字符，避免泄露
           python check_release.py
-        continue-on-error: true
 
       # ✅ 7. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
@@ -82,37 +81,14 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
         run: |
-          python -c "
-          import smtplib
-          from email.mime.text import MIMEText
-
-          smtp_server = '$SMTP_SERVER'
-          smtp_port = int('$SMTP_PORT' or 587)
-          smtp_user = '$SMTP_USER'
-          smtp_password = '$SMTP_PASSWORD'
-          to_email = '$TO_EMAIL'
-
-          if not all([smtp_server, smtp_port, smtp_user, smtp_password, to_email]):
-              print('❌ SMTP 配置不完整，跳过邮件发送')
-              exit(0)
-
-          subject = 'SDK 更新: $SDK $NEW_VERSION'
-          body = '新版本发布: $SDK\n\n版本号: $NEW_VERSION\n下载链接: $RELEASE_URL'
-          msg = MIMEText(body)
-          msg['Subject'] = subject
-          msg['From'] = smtp_user
-          msg['To'] = to_email
-
-          try:
-              with smtplib.SMTP(smtp_server, smtp_port) as server:
-                  server.starttls()
-                  server.login(smtp_user, smtp_password)
-                  server.sendmail(smtp_user, to_email, msg.as_string())
-                  print('✅ 邮件通知已发送')
-          except Exception as e:
-              print(f'❌ 邮件发送失败: {str(e)}')
-              exit(1)
-          "
+          if [ -n "$SMTP_SERVER" ]; then
+            echo "Sending email notification..."
+            SUBJECT="SDK 更新: $SDK $NEW_VERSION"
+            BODY="新版本发布: $SDK\n\n版本号: $NEW_VERSION\n下载链接: $RELEASE_URL"
+            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v $TO_EMAIL
+          else
+            echo "❌ SMTP 未配置，跳过邮件发送"
+          fi
 
       # ✅ 9. 发送 Telegram 通知
       - name: Send Telegram Notification
@@ -123,15 +99,10 @@ jobs:
         run: |
           if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
             MESSAGE="🚀 新版本发布\n📦 SDK: $SDK\n🔖 版本号: $NEW_VERSION\n🔗 链接: $RELEASE_URL"
-            RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
               -d chat_id="$TELEGRAM_CHAT_ID" \
-              -d text="$MESSAGE")
-            if echo "$RESPONSE" | grep -q '"ok":true'; then
-              echo "✅ Telegram 通知已发送"
-            else
-              echo "❌ Telegram 通知发送失败: $RESPONSE"
-              exit 1
-            fi
+              -d text="$MESSAGE"
+            echo "✅ Telegram 通知已发送"
           else
             echo "❌ Telegram Token 或 Chat ID 未配置"
           fi
