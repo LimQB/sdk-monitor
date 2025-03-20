@@ -1,0 +1,117 @@
+name: Check SDK Updates
+
+on:
+  schedule:
+    - cron: '0 * * * *' # 每小时执行一次
+  workflow_dispatch: # 支持手动触发
+
+jobs:
+  check-releases:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo:
+          - "facebook/facebook-ios-sdk"            # Facebook SDK
+          - "adjust/ios_sdk"                       # Adjust SDK
+          - "firebase/firebase-ios-sdk"            # Firebase SDK
+          - "adjust/adjust_signature_sdk"          # Adjust Signature SDK
+
+    steps:
+      # ✅ 1. 拉取代码仓库
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      # ✅ 2. 设置 Python 环境
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      # ✅ 3. 安装必要的库
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      # ✅ 4. 获取最新版本
+      - name: Check for new release
+        id: check-release
+        run: |
+          import requests
+          import os
+
+          REPO = "${{ matrix.repo }}"
+          API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
+
+          response = requests.get(API_URL)
+          if response.status_code != 200:
+              print(f"❌ 无法获取 {REPO} 的最新版本")
+              exit(1)
+
+          latest_version = response.json()['tag_name']
+          release_url = response.json()['html_url']
+
+          # 文件命名为仓库名，防止冲突
+          version_file = REPO.replace("/", "_") + "_latest_version.txt"
+
+          # 读取已保存的版本号
+          try:
+              with open(version_file, "r") as f:
+                  saved_version = f.read().strip()
+          except FileNotFoundError:
+              saved_version = None
+
+          if latest_version != saved_version:
+              with open(version_file, "w") as f:
+                  f.write(latest_version)
+              print(f"🎉 新版本发布: {latest_version} - {release_url}")
+
+              # 设置输出，供下一个步骤使用
+              with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+                  env_file.write(f"NEW_VERSION={latest_version}\n")
+                  env_file.write(f"RELEASE_URL={release_url}\n")
+                  env_file.write(f"SDK={REPO}\n")
+          else:
+              print(f"✅ {REPO} 已是最新版本")
+
+      # ✅ 5. 发送 GitHub Actions 通知
+      - name: Send GitHub Notification
+        if: env.NEW_VERSION != ''
+        run: |
+          echo "🚀 新版本: ${{ env.NEW_VERSION }}"
+          echo "🔗 链接: ${{ env.RELEASE_URL }}"
+          echo "📦 SDK: ${{ env.SDK }}"
+
+      # ✅ 6. 发送邮件通知（如果需要）
+      - name: Send Email Notification
+        if: env.NEW_VERSION != ''
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+        run: |
+          if [ -n "$SMTP_SERVER" ]; then
+            echo "Sending email notification..."
+            SUBJECT="SDK 更新: $SDK $NEW_VERSION"
+            BODY="新版本发布: $SDK\n\n版本号: $NEW_VERSION\n下载链接: $RELEASE_URL"
+            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v $TO_EMAIL
+          else
+            echo "❌ SMTP 未配置，跳过邮件发送"
+          fi
+
+       # ✅ 7. 发送 Telegram 通知
+      - name: Send Telegram Notification
+        if: env.NEW_VERSION != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            MESSAGE="🚀 新版本发布\n📦 SDK: $SDK\n🔖 版本号: $NEW_VERSION\n🔗 链接: $RELEASE_URL"
+            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+              -d chat_id="$TELEGRAM_CHAT_ID" \
+              -d text="$MESSAGE"
+            echo "✅ Telegram 通知已发送"
+          else
+            echo "❌ Telegram Token 或 Chat ID 未配置"
