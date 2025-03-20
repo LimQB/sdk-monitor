@@ -40,16 +40,36 @@ jobs:
           python --version
           pip show requests
 
-      # ✅ 5. 获取最新版本
+      # ✅ 5. 验证 check_release.py 是否存在
+      - name: Verify check_release.py exists
+        run: |
+          ls -la
+          if [ -f "check_release.py" ]; then
+            echo "✅ check_release.py found in root directory"
+          else
+            echo "❌ check_release.py not found in root directory"
+            exit 1
+          fi
+
+      # ✅ 6. 模拟旧版本以测试通知（可选，测试后可删除）
+      - name: Simulate old version for testing
+        run: |
+          echo "v5.0.0" > facebook_facebook-ios-sdk_latest_version.txt
+          echo "模拟设置旧版本以触发通知"
+
+      # ✅ 7. 获取最新版本
       - name: Check for new release
         id: check-release
         env:
           REPO: ${{ matrix.repo }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
         run: |
+          echo "当前工作目录: $(pwd)"
+          echo "环境变量 REPO: $REPO"
+          echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."
           python check_release.py
 
-      # ✅ 6. 发送 GitHub Actions 通知
+      # ✅ 8. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
         if: env.NEW_VERSION != ''
         run: |
@@ -57,7 +77,7 @@ jobs:
           echo "🔗 链接: ${{ env.RELEASE_URL }}"
           echo "📦 SDK: ${{ env.SDK }}"
 
-      # ✅ 7. 发送邮件通知（如果需要）
+      # ✅ 9. 发送邮件通知（如果需要）
       - name: Send Email Notification
         if: env.NEW_VERSION != ''
         env:
@@ -67,16 +87,39 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
         run: |
-          if [ -n "$SMTP_SERVER" ]; then
-            echo "Sending email notification..."
-            SUBJECT="SDK 更新: $SDK $NEW_VERSION"
-            BODY="新版本发布: $SDK\n\n版本号: $NEW_VERSION\n下载链接: $RELEASE_URL"
-            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v $TO_EMAIL
-          else
-            echo "❌ SMTP 未配置，跳过邮件发送"
-          fi
+          python -c "
+          import smtplib
+          from email.mime.text import MIMEText
 
-      # ✅ 8. 发送 Telegram 通知
+          smtp_server = '$SMTP_SERVER'
+          smtp_port = int('$SMTP_PORT' or 587)
+          smtp_user = '$SMTP_USER'
+          smtp_password = '$SMTP_PASSWORD'
+          to_email = '$TO_EMAIL'
+
+          if not all([smtp_server, smtp_port, smtp_user, smtp_password, to_email]):
+              print('❌ SMTP 配置不完整，跳过邮件发送')
+              exit(0)
+
+          subject = 'SDK 更新: $SDK $NEW_VERSION'
+          body = '新版本发布: $SDK\n\n版本号: $NEW_VERSION\n下载链接: $RELEASE_URL'
+          msg = MIMEText(body)
+          msg['Subject'] = subject
+          msg['From'] = smtp_user
+          msg['To'] = to_email
+
+          try:
+              with smtplib.SMTP(smtp_server, smtp_port) as server:
+                  server.starttls()
+                  server.login(smtp_user, smtp_password)
+                  server.sendmail(smtp_user, to_email, msg.as_string())
+                  print('✅ 邮件通知已发送')
+          except Exception as e:
+              print(f'❌ 邮件发送失败: {str(e)}')
+              exit(1)
+          "
+
+      # ✅ 10. 发送 Telegram 通知
       - name: Send Telegram Notification
         if: env.NEW_VERSION != ''
         env:
@@ -85,10 +128,15 @@ jobs:
         run: |
           if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
             MESSAGE="🚀 新版本发布\n📦 SDK: $SDK\n🔖 版本号: $NEW_VERSION\n🔗 链接: $RELEASE_URL"
-            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
               -d chat_id="$TELEGRAM_CHAT_ID" \
-              -d text="$MESSAGE"
-            echo "✅ Telegram 通知已发送"
+              -d text="$MESSAGE")
+            if echo "$RESPONSE" | grep -q '"ok":true'; then
+              echo "✅ Telegram 通知已发送"
+            else
+              echo "❌ Telegram 通知发送失败: $RESPONSE"
+              exit 1
+            fi
           else
             echo "❌ Telegram Token 或 Chat ID 未配置"
           fi
