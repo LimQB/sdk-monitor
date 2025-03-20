@@ -51,13 +51,7 @@ jobs:
             exit 1
           fi
 
-      # ✅ 6. 模拟旧版本以测试通知（可选，测试后可删除）
-      - name: Simulate old version for testing
-        run: |
-          echo "v5.0.0" > facebook_facebook-ios-sdk_latest_version.txt
-          echo "模拟设置旧版本以触发通知"
-
-      # ✅ 7. 获取最新版本
+      # ✅ 6. 获取最新版本
       - name: Check for new release
         id: check-release
         env:
@@ -68,8 +62,9 @@ jobs:
           echo "环境变量 REPO: $REPO"
           echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."
           python check_release.py
+        continue-on-error: true
 
-      # ✅ 8. 发送 GitHub Actions 通知
+      # ✅ 7. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
         if: env.NEW_VERSION != ''
         run: |
@@ -77,7 +72,7 @@ jobs:
           echo "🔗 链接: ${{ env.RELEASE_URL }}"
           echo "📦 SDK: ${{ env.SDK }}"
 
-      # ✅ 9. 发送邮件通知（如果需要）
+      # ✅ 8. 发送邮件通知（如果需要）
       - name: Send Email Notification
         if: env.NEW_VERSION != ''
         env:
@@ -119,7 +114,7 @@ jobs:
               exit(1)
           "
 
-      # ✅ 10. 发送 Telegram 通知
+      # ✅ 9. 发送 Telegram 通知
       - name: Send Telegram Notification
         if: env.NEW_VERSION != ''
         env:
