@@ -22,10 +22,7 @@ try:
     response = requests.get(API_URL, headers=headers)
     print(f"API 请求状态码: {response.status_code}")
 
-    if response.status_code == 404:
-        print(f"⚠️ {REPO} 没有发布任何 release，跳过检查")
-        sys.exit(0)  # 正常退出，不视为错误
-    elif response.status_code != 200:
+    if response.status_code != 200:
         print(f"❌ 无法获取 {REPO} 的最新版本，状态码: {response.status_code}")
         print(f"错误信息: {response.text}")
         sys.exit(1)
