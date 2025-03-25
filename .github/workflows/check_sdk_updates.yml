@@ -47,7 +47,8 @@ jobs:
         run: |
           python --version
           pip show requests
-
+          pip show packaging  # 确保 packaging 安装成功
+          
       # ✅ 5. 验证 check_release.py 是否存在
       - name: Verify check_release.py exists
         run: |
