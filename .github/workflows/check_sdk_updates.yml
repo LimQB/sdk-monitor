@@ -8,7 +8,7 @@ on:
 jobs:
   check-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 30  # 设置超时时间为 30 分钟
     strategy:
       fail-fast: false
       matrix:
@@ -19,23 +19,28 @@ jobs:
           - "adjust/adjust_signature_sdk"          # Adjust Signature SDK
 
     steps:
+      # ✅ 1. 拉取代码仓库
       - name: Checkout repository
         uses: actions/checkout@v4
       
+      # ✅ 2. 设置 Python 环境
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
       
+      # ✅ 3. 安装必要的库
       - name: Install dependencies
         run: |
           pip install requests
       
+      # ✅ 4. 调试 Python 环境
       - name: Verify Python and requests
         run: |
           python --version
           pip show requests
 
+      # ✅ 5. 验证 check_release.py 是否存在
       - name: Verify check_release.py exists
         run: |
           ls -la
@@ -46,6 +51,7 @@ jobs:
             exit 1
           fi
 
+      # ✅ 6. 获取最新版本
       - name: Check for new release
         id: check-release
         env:
@@ -57,6 +63,7 @@ jobs:
           echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."  # 只显示前5个字符，避免泄露
           python check_release.py
 
+      # ✅ 7. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
         if: env.NEW_VERSION != ''
         run: |
@@ -64,5 +71,38 @@ jobs:
           echo "🔗 链接: ${{ env.RELEASE_URL }}"
           echo "📦 SDK: ${{ env.SDK }}"
 
+      # ✅ 8. 发送邮件通知（如果需要）
       - name: Send Email Notification
-        if: env.NEW
+        if: env.NEW_VERSION != ''
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+        run: |
+          if [ -n "$SMTP_SERVER" ]; then
+            echo "Sending email notification..."
+            SUBJECT="SDK 更新: $SDK $NEW_VERSION"
+            BODY="新版本发布: $SDK\n\n版本号: $NEW_VERSION\n下载链接: $RELEASE_URL"
+            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v $TO_EMAIL
+          else
+            echo "❌ SMTP 未配置，跳过邮件发送"
+          fi
+
+      # ✅ 9. 发送 Telegram 通知
+      - name: Send Telegram Notification
+        if: env.NEW_VERSION != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            MESSAGE="🚀 新版本发布\n📦 SDK: $SDK\n🔖 版本号: $NEW_VERSION\n🔗 链接: $RELEASE_URL"
+            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+              -d chat_id="$TELEGRAM_CHAT_ID" \
+              -d text="$MESSAGE"
+            echo "✅ Telegram 通知已发送"
+          else
+            echo "❌ Telegram Token 或 Chat ID 未配置"
+          fi
