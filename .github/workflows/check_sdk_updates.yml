@@ -22,6 +22,14 @@ jobs:
       # ✅ 1. 拉取代码仓库
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Cache SDK version files
+        uses: actions/cache@v3
+        with:
+          path: versions  # 需要缓存的目录
+          key: sdk-versions-${{ matrix.repo }}
+          restore-keys: |
+            sdk-versions-
       
       # ✅ 2. 设置 Python 环境
       - name: Setup Python
