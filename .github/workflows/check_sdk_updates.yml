@@ -82,11 +82,23 @@ jobs:
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
         run: |
           if [ -n "$SMTP_SERVER" ]; then
-            echo "Sending email notification..."
-            SUBJECT="SDK 更新: $SDK $NEW_VERSION"
-            BODY="新版本发布: $SDK\n\n版本号: $NEW_VERSION\n下载链接: $RELEASE_URL"
-            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v $TO_EMAIL
-          else
+            echo "使用 Python 发送邮件..."
+            python - <<EOF
+            import smtplib
+            from email.message import EmailMessage
+
+            msg = EmailMessage()
+            msg['Subject'] = f"SDK 更新: {os.environ['SDK']} {os.environ['NEW_VERSION']}"
+            msg['From'] = os.environ['SMTP_USER']
+            msg['To'] = os.environ['TO_EMAIL']
+            msg.set_content(f"新版本发布: {os.environ['SDK']}\n版本号: {os.environ['NEW_VERSION']}\n下载链接: {os.environ['RELEASE_URL']}")
+
+            with smtplib.SMTP(os.environ['SMTP_SERVER'], int(os.environ['SMTP_PORT'])) as server:
+                server.starttls()
+                server.login(os.environ['SMTP_USER'], os.environ['SMTP_PASSWORD'])
+                server.send_message(msg)
+            EOF
+          else:
             echo "❌ SMTP 未配置，跳过邮件发送"
           fi
 
