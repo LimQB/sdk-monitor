@@ -40,14 +40,16 @@ jobs:
       # ✅ 3. 安装必要的库
       - name: Install dependencies
         run: |
-          pip install requests
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade requests packaging setuptools
+
       
       # ✅ 4. 调试 Python 环境
-      - name: Verify Python and requests
+      - name: Verify installed dependencies
         run: |
           python --version
-          pip show requests
-          pip show packaging  # 确保 packaging 安装成功
+          pip --version
+          pip list | grep packaging || echo "❌ packaging 未安装"
           
       # ✅ 5. 验证 check_release.py 是否存在
       - name: Verify check_release.py exists
