@@ -59,8 +59,8 @@ def main():
         # 版本号比较
         current_ver = parse_version(saved_version)
         latest_ver = parse_version(latest_version)
-        # if latest_ver > current_ver:
-        if True:  # 强制触发新版本通知
+        if latest_ver > current_ver:
+        # if True:  # 强制触发新版本通知
             print(f"🎉 发现新版本: {latest_version}")
             with open(version_file, "w") as f:
                 f.write(latest_version)
