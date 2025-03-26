@@ -78,9 +78,8 @@ jobs:
       - name: Send GitHub Notification
         if: env.NEW_VERSION != ''
         run: |
-          echo "🚀 新版本: ${{ env.NEW_VERSION }}"
-          echo "🔗 链接: ${{ env.RELEASE_URL }}"
-          echo "📦 SDK: ${{ env.SDK }}"
+          echo "::notice title=SDK 更新通知::🚀 新版本: ${{ env.NEW_VERSION }} 🔗 [查看](${{ env.RELEASE_URL }}) 📦 SDK: ${{ env.SDK }}"
+
 
       # ✅ 8. 发送邮件通知（如果需要）
       - name: Send Email Notification
@@ -111,9 +110,9 @@ jobs:
           if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
           
             MESSAGE="""🚀 *新版本发布*
-            📦 SDK: \`${SDK}\`
-            🔖 版本号: \`${NEW_VERSION}\`
-            🔗 [点击查看](${RELEASE_URL})"""
+          📦 SDK: \`${SDK}\`
+          🔖 版本号: \`${NEW_VERSION}\`
+          🔗 [点击查看](${RELEASE_URL})"""
             
             # 通过 jq 处理 JSON，确保 \n 正确解析
             JSON=$(jq -n --arg chat_id "$TELEGRAM_CHAT_ID" --arg text "$MESSAGE" '{chat_id: $chat_id, text: $text, parse_mode: "Markdown"}')
@@ -125,5 +124,4 @@ jobs:
             echo "✅ Telegram 通知已发送"
           else
             echo "❌ Telegram Token 或 Chat ID 未配置"
-
           fi
