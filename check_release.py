@@ -59,15 +59,15 @@ def main():
         # 版本号比较
         current_ver = parse_version(saved_version)
         latest_ver = parse_version(latest_version)
-        print(f"✈️ 获取的仓库版本: {saved_version}")
-        print(f"🚘 本地记录的版本: {latest_version}")
+        print(f"✈️ 获取的最新版本: {latest_version}")
+        print(f"🚘 本地记录的版本: {saved_version}")
               
         if latest_ver > current_ver:
-        # if True:  # 强制触发新版本通知
             print(f"🎉 发现新版本: {latest_version}")
+            # 先更新本地版本文件
             with open(version_file, "w") as f:
                 f.write(latest_version)
-
+            
             # 写入 GitHub Actions 环境变量
             with open(os.environ['GITHUB_ENV'], 'a') as env_file:
                 env_file.write(f"NEW_VERSION={latest_version}\n")
