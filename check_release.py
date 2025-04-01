@@ -44,6 +44,7 @@ def main():
         os.makedirs(version_dir, exist_ok=True)
         version_file = os.path.join(version_dir, REPO.replace("/", "_") + "_latest_version.txt")
         print(f"📂 版本文件路径: {version_file}")
+        print(f"📂 当前工作目录: {os.getcwd()}")
 
         saved_version = None
         if os.path.exists(version_file):
@@ -77,15 +78,20 @@ def main():
         if latest_ver > current_ver:
             print(f"🎉 发现新版本: {latest_version}")
             # 更新本地版本文件
-            with open(version_file, "w") as f:
-                f.write(latest_version)
-            # 确认写入是否成功
-            if os.path.exists(version_file):
-                with open(version_file, "r") as f:
-                    written_version = f.read().strip()
-                print(f"✅ 更新本地版本成功，确认版本: {written_version}")
-            else:
-                print("❌ 更新本地版本失败，文件未创建")
+            try:
+                with open(version_file, "w") as f:
+                    f.write(latest_version)
+                # 确认写入是否成功
+                if os.path.exists(version_file):
+                    with open(version_file, "r") as f:
+                        written_version = f.read().strip()
+                    print(f"✅ 更新本地版本成功，确认版本: {written_version}")
+                else:
+                    print("❌ 更新本地版本失败，文件未创建")
+            except Exception as e:
+                print(f"❌ 写入版本文件失败: {e}")
+                traceback.print_exc()
+                sys.exit(1)
 
             # 写入 GitHub Actions 环境变量
             with open(os.environ['GITHUB_ENV'], 'a') as env_file:
