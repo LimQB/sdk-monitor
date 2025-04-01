@@ -29,8 +29,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: versions
-          key: sdk-versions-${{ matrix.repo }}-${{ github.sha }}
+          key: sdk-versions-v1-${{ matrix.repo }}
           restore-keys: |
+            sdk-versions-v1-${{ matrix.repo }}-
             sdk-versions-${{ matrix.repo }}-
             sdk-versions-
 
@@ -43,36 +44,36 @@ jobs:
           else
             echo "⚠️ 缓存未命中，将创建新的版本文件"
           fi
-
-      # 模拟旧版本以测试新版本检测（临时步骤）
+      
+      # ✅ 4. 模拟旧版本以测试新版本检测（仅对 firebase/firebase-ios-sdk 应用）
       - name: Simulate older version for testing
+        if: matrix.repo == 'firebase/firebase-ios-sdk'
         run: |
           VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')_latest_version.txt"
           echo "11.10.0" > "$VERSION_FILE"
           echo "✅ 已将版本文件设置为 11.10.0 以进行测试"
           cat "$VERSION_FILE"
-
       
-      # ✅ 4. 设置 Python 环境
+      # ✅ 5. 设置 Python 环境
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
       
-      # ✅ 5. 安装必要的库
+      # ✅ 6. 安装必要的库
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade requests packaging setuptools
       
-      # ✅ 6. 调试 Python 环境
+      # ✅ 7. 调试 Python 环境
       - name: Verify installed dependencies
         run: |
           python --version
           pip --version
           pip list | grep packaging || echo "❌ packaging 未安装"
           
-      # ✅ 7. 验证 check_release.py 是否存在
+      # ✅ 8. 验证 check_release.py 是否存在
       - name: Verify check_release.py exists
         run: |
           ls -la
@@ -83,7 +84,7 @@ jobs:
             exit 1
           fi
 
-      # ✅ 8. 获取最新版本
+      # ✅ 9. 获取最新版本
       - name: Check for new release
         id: check-release
         env:
@@ -95,7 +96,7 @@ jobs:
           echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."  # 只显示前5个字符，避免泄露
           python check_release.py
 
-      # ✅ 9. 验证版本文件内容
+      # ✅ 10. 验证版本文件内容
       - name: Verify version file after script
         run: |
           echo "📂 版本文件目录内容："
@@ -108,13 +109,13 @@ jobs:
             echo "❌ 版本文件未找到"
           fi
 
-      # ✅ 10. 发送 GitHub Actions 通知
+      # ✅ 11. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
         if: env.NEW_VERSION != ''
         run: |
           echo "::notice title=SDK 更新通知::🚀 新版本: ${{ env.NEW_VERSION }} 🔗 [查看](${{ env.RELEASE_URL }}) 📦 SDK: ${{ env.SDK }}"
 
-      # ✅ 11. 发送邮件通知（如果需要）
+      # ✅ 12. 发送邮件通知（如果需要）
       - name: Send Email Notification
         if: env.NEW_VERSION != ''
         env:
@@ -128,12 +129,12 @@ jobs:
             echo "Sending email notification..."
             SUBJECT="SDK 更新: $SDK $NEW_VERSION"
             BODY="新版本发布: $SDK\n\n版本号: $NEW_VERSION\n下载链接: $RELEASE_URL"
-            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v $TO_EMAIL
+            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v $TO_EMAIL || echo "❌ 邮件发送失败"
           else
             echo "❌ SMTP 未配置，跳过邮件发送"
           fi
 
-      # ✅ 12. 发送 Telegram 通知
+      # ✅ 13. 发送 Telegram 通知
       - name: Send Telegram Notification
         if: env.NEW_VERSION != ''
         env:
