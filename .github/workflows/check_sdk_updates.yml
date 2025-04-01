@@ -23,35 +23,47 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ✅ 2. 缓存版本文件
       - name: Cache SDK version files
+        id: cache-versions
         uses: actions/cache@v3
         with:
-          path: versions  # 需要缓存的目录
-          key: sdk-versions-${{ matrix.repo }}
+          path: versions
+          key: sdk-versions-${{ matrix.repo }}-${{ github.sha }}
           restore-keys: |
+            sdk-versions-${{ matrix.repo }}-
             sdk-versions-
+
+      # ✅ 3. 验证缓存命中
+      - name: Verify cache hit
+        run: |
+          if [ "${{ steps.cache-versions.outputs.cache-hit }}" == "true" ]; then
+            echo "✅ 缓存命中，版本文件已恢复"
+            ls -la versions/
+          else
+            echo "⚠️ 缓存未命中，将创建新的版本文件"
+          fi
       
-      # ✅ 2. 设置 Python 环境
+      # ✅ 4. 设置 Python 环境
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
       
-      # ✅ 3. 安装必要的库
+      # ✅ 5. 安装必要的库
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade requests packaging setuptools
-
       
-      # ✅ 4. 调试 Python 环境
+      # ✅ 6. 调试 Python 环境
       - name: Verify installed dependencies
         run: |
           python --version
           pip --version
           pip list | grep packaging || echo "❌ packaging 未安装"
           
-      # ✅ 5. 验证 check_release.py 是否存在
+      # ✅ 7. 验证 check_release.py 是否存在
       - name: Verify check_release.py exists
         run: |
           ls -la
@@ -62,7 +74,7 @@ jobs:
             exit 1
           fi
 
-      # ✅ 6. 获取最新版本
+      # ✅ 8. 获取最新版本
       - name: Check for new release
         id: check-release
         env:
@@ -74,14 +86,26 @@ jobs:
           echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."  # 只显示前5个字符，避免泄露
           python check_release.py
 
-      # ✅ 7. 发送 GitHub Actions 通知
+      # ✅ 9. 验证版本文件内容
+      - name: Verify version file after script
+        run: |
+          echo "📂 版本文件目录内容："
+          ls -la versions/
+          VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')_latest_version.txt"
+          if [ -f "$VERSION_FILE" ]; then
+            echo "✅ 版本文件存在，内容："
+            cat "$VERSION_FILE"
+          else
+            echo "❌ 版本文件未找到"
+          fi
+
+      # ✅ 10. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
         if: env.NEW_VERSION != ''
         run: |
           echo "::notice title=SDK 更新通知::🚀 新版本: ${{ env.NEW_VERSION }} 🔗 [查看](${{ env.RELEASE_URL }}) 📦 SDK: ${{ env.SDK }}"
 
-
-      # ✅ 8. 发送邮件通知（如果需要）
+      # ✅ 11. 发送邮件通知（如果需要）
       - name: Send Email Notification
         if: env.NEW_VERSION != ''
         env:
@@ -100,7 +124,7 @@ jobs:
             echo "❌ SMTP 未配置，跳过邮件发送"
           fi
 
-      # ✅ 9. 发送 Telegram 通知
+      # ✅ 12. 发送 Telegram 通知
       - name: Send Telegram Notification
         if: env.NEW_VERSION != ''
         env:
@@ -108,11 +132,10 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
-          
             MESSAGE="""🚀 *新版本发布*
-          📦 SDK: \`${SDK}\`
-          🔖 版本号: \`${NEW_VERSION}\`
-          🔗 [点击查看](${RELEASE_URL})"""
+            📦 SDK: \`${SDK}\`
+            🔖 版本号: \`${NEW_VERSION}\`
+            🔗 [点击查看](${RELEASE_URL})"""
             
             # 通过 jq 处理 JSON，确保 \n 正确解析
             JSON=$(jq -n --arg chat_id "$TELEGRAM_CHAT_ID" --arg text "$MESSAGE" '{chat_id: $chat_id, text: $text, parse_mode: "Markdown"}')
