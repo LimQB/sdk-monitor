@@ -4,6 +4,15 @@ import sys
 import traceback
 from packaging.version import parse as parse_version
 
+def normalize_version(version):
+    # 去掉前缀 v 或 V
+    if version.startswith(('v', 'V')):
+        version = version[1:]
+    # 去掉末尾的 .0
+    while version.endswith('.0'):
+        version = version[:-2]
+    return version
+
 def main():
     try:
         REPO = os.getenv("REPO")
@@ -69,8 +78,8 @@ def main():
             sys.exit(0)
 
         # 版本号比较
-        current_ver = parse_version(saved_version)
-        latest_ver = parse_version(latest_version)
+        current_ver = parse_version(normalize_version(saved_version))
+        latest_ver = parse_version(normalize_version(latest_version))
         print(f"✈️ 获取的最新版本: {latest_version}")
         print(f"🚘 本地记录的版本: {saved_version}")
         print(f"🔍 版本比较: {latest_ver} > {current_ver} = {latest_ver > current_ver}")
