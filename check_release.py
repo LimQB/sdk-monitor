@@ -2,6 +2,7 @@ import requests
 import os
 import sys
 import traceback
+import subprocess
 from packaging.version import parse as parse_version
 
 def main():
@@ -59,13 +60,8 @@ def main():
             print(f"📌 初次运行，记录最新版本: {latest_version}")
             with open(version_file, "w") as f:
                 f.write(latest_version)
-            # 确认写入是否成功
-            if os.path.exists(version_file):
-                with open(version_file, "r") as f:
-                    written_version = f.read().strip()
-                print(f"✅ 首次写入成功，确认版本: {written_version}")
-            else:
-                print("❌ 首次写入失败，文件未创建")
+            # 提交版本文件到仓库
+            commit_version_file(version_file, f"Initial version: {latest_version}")
             sys.exit(0)
 
         # 版本号比较
@@ -88,6 +84,8 @@ def main():
                     print(f"✅ 更新本地版本成功，确认版本: {written_version}")
                 else:
                     print("❌ 更新本地版本失败，文件未创建")
+                # 提交版本文件到仓库
+                commit_version_file(version_file, f"Update version to {latest_version}")
             except Exception as e:
                 print(f"❌ 写入版本文件失败: {e}")
                 traceback.print_exc()
@@ -104,6 +102,22 @@ def main():
     except Exception as e:
         print(f"❌ 发生错误: {e}")
         traceback.print_exc()
+        sys.exit(1)
+
+def commit_version_file(file_path, commit_message):
+    """将版本文件提交到 Git 仓库"""
+    try:
+        # 配置 Git 用户（GitHub Actions 环境需要）
+        subprocess.run(["git", "config", "--global", "user.name", "github-actions[bot]"], check=True)
+        subprocess.run(["git", "config", "--global", "user.email", "github-actions[bot]@users.noreply.github.com"], check=True)
+        
+        # 添加文件并提交
+        subprocess.run(["git", "add", file_path], check=True)
+        subprocess.run(["git", "commit", "-m", commit_message], check=True)
+        subprocess.run(["git", "push"], check=True)
+        print(f"📤 成功提交版本文件: {commit_message}")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ 提交版本文件失败: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
