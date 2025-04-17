@@ -19,11 +19,11 @@ jobs:
           - "adjust/adjust_signature_sdk"          # Adjust Signature SDK
 
     steps:
-      # 1. 拉取代码仓库
+      # ✅ 1. 拉取代码仓库
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. 缓存版本文件
+      # ✅ 2. 缓存版本文件
       - name: Cache SDK version files
         id: cache-versions
         uses: actions/cache@v3
@@ -36,71 +36,71 @@ jobs:
             sdk-versions-${{ matrix.repo }}-
             sdk-versions-
 
-      # 3. 验证缓存命中
+      # ✅ 3. 验证缓存命中
       - name: Verify cache hit
         run: |
           if [ "${{ steps.cache-versions.outputs.cache-hit }}" == "true" ]; then
-            echo "缓存命中，版本文件已恢复"
+            echo "✅ 缓存命中，版本文件已恢复"
             ls -la versions/
           else
-            echo "缓存未命中，将创建新的版本文件"
+            echo "⚠️ 缓存未命中，将创建新的版本文件"
           fi
       
-      # 4. 重置版本文件为正确的初始值（临时步骤）
+      # ✅ 4. 重置版本文件为正确的初始值（临时步骤）
       # - name: Reset version files to correct initial values
       #   run: |
       #     VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')_latest_version.txt"
       #     case ${{ matrix.repo }} in
       #       "facebook/facebook-ios-sdk")
       #         echo "v18.0.0" > "$VERSION_FILE"
-      #         echo "已将 facebook/facebook-ios-sdk 版本重置为 v18.0.0"
+      #         echo "✅ 已将 facebook/facebook-ios-sdk 版本重置为 v18.0.0"
       #         ;;
       #       "adjust/ios_sdk")
       #         echo "v4.38.2" > "$VERSION_FILE"  # 请替换为实际最新版本
-      #         echo "已将 adjust/ios_sdk 版本重置为 v4.38.2"
+      #         echo "✅ 已将 adjust/ios_sdk 版本重置为 v4.38.2"
       #         ;;
       #       "firebase/firebase-ios-sdk")
       #         echo "11.10.0" > "$VERSION_FILE"
-      #         echo "已将 firebase/firebase-ios-sdk 版本重置为 11.10.0"
+      #         echo "✅ 已将 firebase/firebase-ios-sdk 版本重置为 11.10.0"
       #         ;;
       #       "adjust/adjust_signature_sdk")
       #         echo "v3.35.2" > "$VERSION_FILE"
-      #         echo "已将 adjust/adjust_signature_sdk 版本重置为 v3.35.2"
+      #         echo "✅ 已将 adjust/adjust_signature_sdk 版本重置为 v3.35.2"
       #         ;;
       #     esac
       #     cat "$VERSION_FILE"
       
-      # 5. 设置 Python 环境
+      # ✅ 5. 设置 Python 环境
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
       
-      # 6. 安装必要的库
+      # ✅ 6. 安装必要的库
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade requests packaging setuptools
       
-      # 7. 调试 Python 环境
+      # ✅ 7. 调试 Python 环境
       - name: Verify installed dependencies
         run: |
           python --version
           pip --version
-          pip list | grep packaging || echo " packaging 未安装"
+          pip list | grep packaging || echo "❌ packaging 未安装"
           
-      # 8. 验证 check_release.py 是否存在
+      # ✅ 8. 验证 check_release.py 是否存在
       - name: Verify check_release.py exists
         run: |
           ls -la
           if [ -f "check_release.py" ]; then
-            echo "check_release.py found in root directory"
+            echo "✅ check_release.py found in root directory"
           else
-            echo "check_release.py not found in root directory"
+            echo "❌ check_release.py not found in root directory"
             exit 1
           fi
 
-      # 9. 获取最新版本
+      # ✅ 9. 获取最新版本
       - name: Check for new release
         id: check-release
         env:
@@ -112,34 +112,26 @@ jobs:
           echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."  # 只显示前5个字符，避免泄露
           python check_release.py
 
-      # 10. 验证版本文件内容
+      # ✅ 10. 验证版本文件内容
       - name: Verify version file after script
         run: |
-          echo "版本文件目录内容："
+          echo "📂 版本文件目录内容："
           ls -la versions/
           VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')_latest_version.txt"
           if [ -f "$VERSION_FILE" ]; then
-            echo "版本文件存在，内容："
+            echo "✅ 版本文件存在，内容："
             cat "$VERSION_FILE"
           else
-            echo "版本文件未找到"
+            echo "❌ 版本文件未找到"
           fi
 
-      # 10.5. 保存最新版本文件到缓存
-      - name: Save SDK version files
-        if: always()
-        uses: actions/cache/save@v3
-        with:
-          path: versions
-          key: sdk-versions-v2-${{ matrix.repo }}-${{ github.run_id }}
-
-      # 11. 发送 GitHub Actions 通知
+      # ✅ 11. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
         if: env.NEW_VERSION != ''
         run: |
-          echo "::notice title=SDK 更新通知:: 新版本: ${{ env.NEW_VERSION }} [查看](${{ env.RELEASE_URL }}) SDK: ${{ env.SDK }}"
+          echo "::notice title=SDK 更新通知::🚀 新版本: ${{ env.NEW_VERSION }} 🔗 [查看](${{ env.RELEASE_URL }}) 📦 SDK: ${{ env.SDK }}"
 
-      # 12. 发送邮件通知（如果需要）
+      # ✅ 12. 发送邮件通知（如果需要）
       - name: Send Email Notification
         if: env.NEW_VERSION != ''
         env:
@@ -153,12 +145,12 @@ jobs:
             echo "Sending email notification..."
             SUBJECT="SDK 更新: $SDK $NEW_VERSION"
             BODY="新版本发布: $SDK\n\n版本号: $NEW_VERSION\n下载链接: $RELEASE_URL"
-            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v $TO_EMAIL || echo " 邮件发送失败"
+            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v $TO_EMAIL || echo "❌ 邮件发送失败"
           else
-            echo " SMTP 未配置，跳过邮件发送"
+            echo "❌ SMTP 未配置，跳过邮件发送"
           fi
 
-      # 13. 发送 Telegram 通知
+      # ✅ 13. 发送 Telegram 通知
       - name: Send Telegram Notification
         if: env.NEW_VERSION != ''
         env:
@@ -166,10 +158,10 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
-            MESSAGE=""" 新版本发布
-            SDK: \`${SDK}\`
-            版本号: \`${NEW_VERSION}\`
-            [点击查看](${RELEASE_URL})"""
+            MESSAGE="""🚀 *新版本发布*
+            📦 SDK: \`${SDK}\`
+            🔖 版本号: \`${NEW_VERSION}\`
+            🔗 [点击查看](${RELEASE_URL})"""
             
             # 通过 jq 处理 JSON，确保 \n 正确解析
             JSON=$(jq -n --arg chat_id "$TELEGRAM_CHAT_ID" --arg text "$MESSAGE" '{chat_id: $chat_id, text: $text, parse_mode: "Markdown"}')
@@ -178,7 +170,7 @@ jobs:
               -H "Content-Type: application/json" \
               -d "$JSON"
 
-            echo "Telegram 通知已发送"
+            echo "✅ Telegram 通知已发送"
           else
-            echo "Telegram Token 或 Chat ID 未配置"
+            echo "❌ Telegram Token 或 Chat ID 未配置"
           fi
