@@ -29,8 +29,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: versions
-          key: sdk-versions-v2-${{ matrix.repo }}  # 更改为 v2 以使旧缓存失效
+          key: sdk-versions-v3-${{ matrix.repo }}  # 更改为 v3 以使旧缓存失效
           restore-keys: |
+            sdk-versions-v3-${{ matrix.repo }}-
             sdk-versions-v2-${{ matrix.repo }}-
             sdk-versions-v1-${{ matrix.repo }}-
             sdk-versions-${{ matrix.repo }}-
@@ -174,3 +175,11 @@ jobs:
           else
             echo "❌ Telegram Token 或 Chat ID 未配置"
           fi
+
+      # ✅ 14. 保存版本文件到缓存（确保新版本被缓存）
+      - name: Save version files to cache after update
+        if: env.NEW_VERSION != ''
+        uses: actions/cache@v3
+        with:
+          path: versions
+          key: sdk-versions-v3-${{ matrix.repo }}  # 使用相同的 key 覆盖旧缓存
