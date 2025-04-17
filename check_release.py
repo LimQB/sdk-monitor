@@ -73,15 +73,6 @@ def main():
                 with open(version_file, "r") as f:
                     written_version = f.read().strip()
                 print(f"✅ 首次写入成功，确认版本: {written_version}")
-                # 首次运行也commit并push
-                try:
-                    os.system(f"git add {version_file}")
-                    os.system(f"git config user.name 'github-actions[bot]'")
-                    os.system(f"git config user.email 'github-actions[bot]@users.noreply.github.com'")
-                    os.system(f"git commit -m 'chore: 初始化 {REPO} 版本号为 {latest_version}'")
-                    os.system("git push")
-                except Exception as e:
-                    print(f"❌ 首次commit/push失败: {e}")
             else:
                 print("❌ 首次写入失败，文件未创建")
             sys.exit(0)
@@ -104,15 +95,6 @@ def main():
                     with open(version_file, "r") as f:
                         written_version = f.read().strip()
                     print(f"✅ 更新本地版本成功，确认版本: {written_version}")
-                    # 检测到新版本时commit并push
-                    try:
-                        os.system(f"git add {version_file}")
-                        os.system(f"git config user.name 'github-actions[bot]'")
-                        os.system(f"git config user.email 'github-actions[bot]@users.noreply.github.com'")
-                        os.system(f"git commit -m 'chore: {REPO} 升级到 {latest_version}'")
-                        os.system("git push")
-                    except Exception as e:
-                        print(f"❌ commit/push失败: {e}")
                 else:
                     print("❌ 更新本地版本失败，文件未创建")
             except Exception as e:
