@@ -48,28 +48,28 @@ jobs:
           fi
       
       # ✅ 4. 重置版本文件为正确的初始值（临时步骤）
-      - name: Reset version files to correct initial values
-        run: |
-          VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')_latest_version.txt"
-          case ${{ matrix.repo }} in
-            "facebook/facebook-ios-sdk")
-              echo "v18.0.0" > "$VERSION_FILE"
-              echo "✅ 已将 facebook/facebook-ios-sdk 版本重置为 v18.0.0"
-              ;;
-            "adjust/ios_sdk")
-              echo "v4.38.2" > "$VERSION_FILE"  # 请替换为实际最新版本
-              echo "✅ 已将 adjust/ios_sdk 版本重置为 v5.2.0"
-              ;;
-            "firebase/firebase-ios-sdk")
-              echo "11.10.0" > "$VERSION_FILE"
-              echo "✅ 已将 firebase/firebase-ios-sdk 版本重置为 11.10.0"
-              ;;
-            "adjust/adjust_signature_sdk")
-              echo "v3.35.2" > "$VERSION_FILE"
-              echo "✅ 已将 adjust/adjust_signature_sdk 版本重置为 v3.35.2"
-              ;;
-          esac
-          cat "$VERSION_FILE"
+      # - name: Reset version files to correct initial values
+      #   run: |
+      #     VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')_latest_version.txt"
+      #     case ${{ matrix.repo }} in
+      #       "facebook/facebook-ios-sdk")
+      #         echo "v18.0.0" > "$VERSION_FILE"
+      #         echo "✅ 已将 facebook/facebook-ios-sdk 版本重置为 v18.0.0"
+      #         ;;
+      #       "adjust/ios_sdk")
+      #         echo "v4.38.2" > "$VERSION_FILE"  # 请替换为实际最新版本
+      #         echo "✅ 已将 adjust/ios_sdk 版本重置为 v5.2.0"
+      #         ;;
+      #       "firebase/firebase-ios-sdk")
+      #         echo "11.10.0" > "$VERSION_FILE"
+      #         echo "✅ 已将 firebase/firebase-ios-sdk 版本重置为 11.10.0"
+      #         ;;
+      #       "adjust/adjust_signature_sdk")
+      #         echo "v3.35.2" > "$VERSION_FILE"
+      #         echo "✅ 已将 adjust/adjust_signature_sdk 版本重置为 v3.35.2"
+      #         ;;
+      #     esac
+      #     cat "$VERSION_FILE"
       
       # ✅ 5. 设置 Python 环境
       - name: Setup Python
