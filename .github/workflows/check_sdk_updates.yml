@@ -125,6 +125,14 @@ jobs:
             echo "❌ 版本文件未找到"
           fi
 
+      # ✅ 10.5. 保存最新版本文件到缓存
+      - name: Save SDK version files
+        if: always()
+        uses: actions/cache/save@v3
+        with:
+          path: versions
+          key: sdk-versions-v2-${{ matrix.repo }}
+
       # ✅ 11. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
         if: env.NEW_VERSION != ''
