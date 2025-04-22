@@ -183,3 +183,14 @@ jobs:
         with:
           path: versions
           key: sdk-versions-v3-${{ matrix.repo }}  # 使用相同的 key 覆盖旧缓存
+
+      # ✅ 15. 提交版本文件到 Git 仓库（自动记录更新）
+      - name: Commit and push updated version files
+        if: env.NEW_VERSION != ''
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add sdk_versions.txt sdk_versions_history.txt
+          git commit -m "🔖 更新版本: ${{ env.SDK }} -> ${{ env.NEW_VERSION }}" || echo "⚠️ 无需提交"
+          git push origin HEAD:${{ github.ref }}
