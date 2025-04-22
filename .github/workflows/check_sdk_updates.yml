@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
-      fail-fast: false
+      fail-fast: false  # Allow all matrix jobs to run, even if one fails
       matrix:
         repo:
           - "facebook/facebook-ios-sdk"
@@ -22,9 +22,8 @@ jobs:
           - "firebase/firebase-ios-sdk"
           - "adjust/adjust_signature_sdk"
 
-    # Serialize the commit and push operations for all matrix jobs
     concurrency:
-      group: check-sdk-updates-commit-${{ github.workflow }}  # Ensure sequential commits
+      group: check-sdk-updates-commit-${{ github.workflow }}
       cancel-in-progress: false
 
     steps:
@@ -105,10 +104,23 @@ jobs:
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git pull --rebase origin main  # Fetch and rebase to avoid conflicts
+          # Stage changes before pulling to avoid "unstaged changes" error
           git add versions.json
-          git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }}"
-          git push
+          # Retry the pull-rebase and push operation up to 3 times
+          for i in {1..3}; do
+            git pull --rebase origin main
+            if [ $? -eq 0 ]; then
+              # If pull succeeds, commit and push
+              git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }}" || echo "No changes to commit (already committed by another job)"
+              git push && break
+            fi
+            echo "Pull or push failed, retrying ($i/3)..."
+            sleep $((i * 5))
+          done
+          if [ $i -eq 3 ]; then
+            echo "❌ Failed to push after 3 retries"
+            exit 1
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
@@ -123,7 +135,7 @@ jobs:
         if: env.VERSION_UPDATED == 'true'
         env:
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
