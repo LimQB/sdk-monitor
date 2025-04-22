@@ -91,6 +91,11 @@ def main():
             update_version_file(version_file, REPO, latest_version)
             append_version_history(history_file, REPO, latest_version)
             print("✅ 初次写入完成")
+            # Set environment variables even for initial run
+            with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+                env_file.write(f"NEW_VERSION={latest_version}\n")
+                env_file.write(f"RELEASE_URL={release_url}\n")
+                env_file.write(f"SDK={REPO}\n")
             sys.exit(0)
 
         # 比较版本
