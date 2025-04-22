@@ -48,9 +48,10 @@ jobs:
       # ✅ 3. 调试缓存恢复
       - name: Debug cache restore
         run: |
+          REPO_DIR="versions/$(echo ${{ matrix.repo }} | tr '/' '_')"
           echo "📂 缓存恢复后的版本文件目录内容："
-          ls -la versions/${{ matrix.repo }} || echo "⚠️ 版本目录为空或不存在"
-          VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')/latest_version.txt"
+          ls -la "$REPO_DIR" || echo "⚠️ 版本目录为空或不存在"
+          VERSION_FILE="$REPO_DIR/latest_version.txt"
           if [ -f "$VERSION_FILE" ]; then
             echo "✅ 缓存中的版本文件存在，内容："
             cat "$VERSION_FILE"
@@ -61,9 +62,10 @@ jobs:
       # ✅ 4. 验证缓存命中
       - name: Verify cache hit
         run: |
+          REPO_DIR="versions/$(echo ${{ matrix.repo }} | tr '/' '_')"
           if [ "${{ steps.cache-versions.outputs.cache-hit }}" == "true" ]; then
             echo "✅ 缓存命中，版本文件已恢复"
-            ls -la versions/${{ matrix.repo }}
+            ls -la "$REPO_DIR" || echo "⚠️ 缓存目录不存在"
           else
             echo "⚠️ 缓存未命中，将创建新的版本文件"
           fi
@@ -113,9 +115,10 @@ jobs:
       # ✅ 10. 验证版本文件内容
       - name: Verify version file after script
         run: |
+          REPO_DIR="versions/$(echo ${{ matrix.repo }} | tr '/' '_')"
           echo "📂 版本文件目录内容："
-          ls -la versions/${{ matrix.repo }}
-          VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')/latest_version.txt"
+          ls -la "$REPO_DIR" || echo "⚠️ 版本目录为空或不存在"
+          VERSION_FILE="$REPO_DIR/latest_version.txt"
           if [ -f "$VERSION_FILE" ]; then
             echo "✅ 版本文件存在，内容："
             cat "$VERSION_FILE"
