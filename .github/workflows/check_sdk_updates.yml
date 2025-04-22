@@ -36,7 +36,7 @@ jobs:
         id: cache-versions
         uses: actions/cache@v3
         with:
-          path: versions
+          path: versions/${{ matrix.repo }}
           key: sdk-versions-v3-${{ matrix.repo }}
           restore-keys: |
             sdk-versions-v3-${{ matrix.repo }}-
@@ -49,8 +49,8 @@ jobs:
       - name: Debug cache restore
         run: |
           echo "📂 缓存恢复后的版本文件目录内容："
-          ls -la versions/ || echo "⚠️ 版本目录为空或不存在"
-          VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')_latest_version.txt"
+          ls -la versions/${{ matrix.repo }} || echo "⚠️ 版本目录为空或不存在"
+          VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')/latest_version.txt"
           if [ -f "$VERSION_FILE" ]; then
             echo "✅ 缓存中的版本文件存在，内容："
             cat "$VERSION_FILE"
@@ -63,7 +63,7 @@ jobs:
         run: |
           if [ "${{ steps.cache-versions.outputs.cache-hit }}" == "true" ]; then
             echo "✅ 缓存命中，版本文件已恢复"
-            ls -la versions/
+            ls -la versions/${{ matrix.repo }}
           else
             echo "⚠️ 缓存未命中，将创建新的版本文件"
           fi
@@ -114,8 +114,8 @@ jobs:
       - name: Verify version file after script
         run: |
           echo "📂 版本文件目录内容："
-          ls -la versions/
-          VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')_latest_version.txt"
+          ls -la versions/${{ matrix.repo }}
+          VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')/latest_version.txt"
           if [ -f "$VERSION_FILE" ]; then
             echo "✅ 版本文件存在，内容："
             cat "$VERSION_FILE"
@@ -127,7 +127,7 @@ jobs:
       - name: Save version files to cache
         uses: actions/cache@v3
         with:
-          path: versions
+          path: versions/${{ matrix.repo }}
           key: sdk-versions-v3-${{ matrix.repo }}
 
       # ✅ 12. 发送 GitHub Actions 通知
