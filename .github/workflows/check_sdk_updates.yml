@@ -205,9 +205,9 @@ jobs:
           if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
             echo "📬 Sending Telegram notification..."
             MESSAGE="🚀 *新版本发布*
-            📦 SDK: \`${SDK}\`
-            🔖 版本号: \`${NEW_VERSION}\`
-            🔗 [点击查看](${RELEASE_URL})"
+          📦 SDK: \`${SDK}\`
+          🔖 版本号: \`${NEW_VERSION}\`
+          🔗 [点击查看](${RELEASE_URL})"
             JSON=$(jq -n --arg chat_id "$TELEGRAM_CHAT_ID" --arg text "$MESSAGE" '{chat_id: $chat_id, text: $text, parse_mode: "Markdown"}')
             RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
               -H "Content-Type: application/json" \
