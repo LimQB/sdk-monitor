@@ -4,6 +4,7 @@ import sys
 import traceback
 import json
 from packaging.version import parse as parse_version
+import subprocess
 
 def normalize_version(version):
     if version.startswith(('v', 'V')):
@@ -12,7 +13,29 @@ def normalize_version(version):
         version = version[:-2]
     return version
 
+def fetch_remote_versions():
+    """Fetch the remote versions.json from the main branch."""
+    try:
+        # Fetch the latest main branch
+        subprocess.run(["git", "fetch", "origin", "main"], check=True)
+        # Get the contents of versions.json from the remote main branch
+        result = subprocess.run(
+            ["git", "show", "origin/main:versions.json"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return json.loads(result.stdout)
+    except subprocess.CalledProcessError:
+        # If the file doesn't exist or there's an error, return an empty dict
+        print("⚠️ Could not fetch remote versions.json, assuming empty file")
+        return {}
+    except json.JSONDecodeError:
+        print("⚠️ Remote versions.json is invalid, assuming empty file")
+        return {}
+
 def read_versions():
+    """Read the local versions.json file."""
     version_file = "versions.json"
     if os.path.exists(version_file):
         with open(version_file, "r") as f:
@@ -20,6 +43,7 @@ def read_versions():
     return {}
 
 def write_versions(versions):
+    """Write the versions to versions.json."""
     with open("versions.json", "w") as f:
         json.dump(versions, f, indent=2)
     print("✅ 已更新 versions.json 文件")
@@ -58,8 +82,14 @@ def main():
         latest_version = latest_release['tag_name']
         release_url = latest_release['html_url']
 
-        # 读取 versions.json
-        versions = read_versions()
+        # Fetch the remote versions.json to merge with local changes
+        remote_versions = fetch_remote_versions()
+        # Read the local versions.json (may have been modified by previous jobs)
+        local_versions = read_versions()
+        # Merge remote versions into local versions
+        versions = remote_versions.copy()
+        versions.update(local_versions)
+
         repo_key = REPO.replace("/", "_")
         saved_version = versions.get(repo_key)
 
