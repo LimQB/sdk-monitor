@@ -5,9 +5,10 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
 
+# Ensure that entire workflow runs are serialized to prevent overlapping runs
 concurrency:
-  group: check-sdk-updates-${{ github.run_id }}
-  cancel-in-progress: true
+  group: check-sdk-updates
+  cancel-in-progress: false
 
 jobs:
   check-release:
@@ -22,7 +23,7 @@ jobs:
           - "firebase/firebase-ios-sdk"
           - "adjust/adjust_signature_sdk"
 
-    # Serialize commits within the same run, but allow different runs to coexist
+    # Serialize commits within the same run
     concurrency:
       group: check-sdk-updates-commit-${{ github.run_id }}
       cancel-in-progress: false
@@ -110,29 +111,20 @@ jobs:
           git status
           cat versions.json
           
-          # Stage changes
+          # Stage and commit changes
           git add versions.json
+          git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }}"
           
-          # Retry the pull-rebase and push operation
+          # Retry the push operation
           for i in {1..3}; do
-            git pull --rebase origin main
-            if [ $? -eq 0 ]; then
-              # If pull succeeds, commit and push
-              git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }}" || echo "No changes to commit (already committed by another job)"
-              git push && break
-            else
-              echo "❌ Pull failed, attempting to resolve conflicts..."
-              git rebase --abort || true  # Abort the rebase if it fails
-              # Fetch the remote version of versions.json
-              git fetch origin
-              git checkout origin/main -- versions.json
-              # Re-apply local changes (rerun the script to regenerate versions.json)
-              python check_release.py
-              git add versions.json
-              git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }} after conflict resolution"
-              git push && break
-            fi
-            echo "Pull or push failed, retrying ($i/3)..."
+            git push && break
+            echo "Push failed, retrying ($i/3)..."
+            # If push fails, fetch the latest main branch and reapply changes
+            git fetch origin
+            git reset --hard origin/main
+            python check_release.py  # Reapply changes on top of the latest main
+            git add versions.json
+            git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }} after failed push"
             sleep $((i * 5))
           done
           if [ $i -eq 3 ]; then
