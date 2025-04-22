@@ -23,6 +23,11 @@ jobs:
           - "firebase/firebase-ios-sdk"
           - "adjust/adjust_signature_sdk"
 
+    # Serialize commit operations within the same run
+    concurrency:
+      group: check-sdk-updates-commit-${{ github.run_id }}
+      cancel-in-progress: false
+
     steps:
       # ✅ 1. 调试 PAT_TOKEN
       - name: Debug PAT_TOKEN
@@ -103,6 +108,10 @@ jobs:
           echo "环境变量 REPO: $REPO"
           echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."
           python check_release.py
+          # Save the updated versions.json for use in retries
+          if [ -f "versions.json" ]; then
+            cp versions.json versions.json.bak
+          fi
 
       # ✅ 10. 提交更新的 versions.json
       - name: Commit updated versions.json
@@ -120,23 +129,33 @@ jobs:
           git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }}"
           
           # Retry the push operation
+          success=false
           for i in {1..3}; do
-            git push && break
+            if git push; then
+              success=true
+              break
+            fi
             echo "Push failed, retrying ($i/3)..."
             # If push fails, fetch the latest main branch and reapply changes
             git fetch origin
             git reset --hard origin/main
-            python check_release.py  # Reapply changes on top of the latest main
+            # Restore the updated versions.json from the backup
+            if [ -f "versions.json.bak" ]; then
+              cp versions.json.bak versions.json
+            else
+              echo "❌ versions.json.bak not found, re-running check_release.py..."
+              python check_release.py
+            fi
             git add versions.json
             git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }} after failed push"
             sleep $((i * 5))
           done
-          if [ $i -eq 3 ]; then
+          if [ "$success" != "true" ]; then
             echo "❌ Failed to push after 3 retries"
             exit 1
           fi
         env:
-          REPO: ${{ matrix.repo }}  # Ensure REPO is set for check_release.py rerun
+          REPO: ${{ matrix.repo }}
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       # ✅ 11. 发送 GitHub Actions 通知
