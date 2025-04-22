@@ -31,7 +31,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}  # Use PAT instead of GITHUB_TOKEN
 
       # ✅ 2. 设置 Python 环境
       - name: Setup Python
@@ -79,7 +79,7 @@ jobs:
         id: check-release
         env:
           REPO: ${{ matrix.repo }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}  # Use PAT for API requests
         run: |
           echo "当前工作目录: $(pwd)"
           echo "环境变量 REPO: $REPO"
@@ -96,7 +96,7 @@ jobs:
           git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }}"
           git push
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}  # Use PAT for pushing
 
       # ✅ 9. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
@@ -128,7 +128,7 @@ jobs:
         if: env.VERSION_UPDATED == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TO_CHAT_ID }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
             MESSAGE="""🚀 *新版本发布*
