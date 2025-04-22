@@ -40,21 +40,33 @@ jobs:
           fi
 
       - name: Run check_release.py
-        id: check
-        env:
-          REPO: ${{ matrix.repo }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
-        run: |
-          python check_release.py
+  id: check
+  env:
+    REPO: ${{ matrix.repo }}
+    GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
+  run: |
+    python check_release.py
 
-      - name: Commit version update if needed
-        if: env.NEW_VERSION != ''
-        run: |
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "GitHub Actions"
-          git add sdk_versions.txt sdk_versions_history.txt
-          git commit -m "🔄 更新版本记录：${{ matrix.repo }} -> ${{ env.NEW_VERSION }}"
-          git push
+    - name: Commit version files (initial or update)
+  run: |
+    git config --global user.email "github-actions@github.com"
+    git config --global user.name "GitHub Actions"
+    git add sdk_versions.txt sdk_versions_history.txt
+    if git diff --staged --quiet; then
+      echo "No changes to commit."
+    else
+      git commit -m "🔄 初始化或更新版本记录：${{ matrix.repo }} -> ${{ env.NEW_VERSION || 'initial' }}"
+      git push
+    fi
+
+    - name: Commit version update if needed
+  if: env.NEW_VERSION != ''
+  run: |
+    git config --global user.email "github-actions@github.com"
+    git config --global user.name "GitHub Actions"
+    git add sdk_versions.txt sdk_versions_history.txt
+    git commit -m "🔄 更新版本记录：${{ matrix.repo }} -> ${{ env.NEW_VERSION }}"
+    git push
 
       - name: Send GitHub Notification
         if: env.NEW_VERSION != ''
