@@ -5,7 +5,7 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
 
-# Ensure that entire workflow runs are serialized to prevent overlapping runs
+# Serialize entire workflow runs to prevent overlapping runs
 concurrency:
   group: check-sdk-updates
   cancel-in-progress: false
@@ -22,11 +22,6 @@ jobs:
           - "adjust/ios_sdk"
           - "firebase/firebase-ios-sdk"
           - "adjust/adjust_signature_sdk"
-
-    # Serialize commits within the same run
-    concurrency:
-      group: check-sdk-updates-commit-${{ github.run_id }}
-      cancel-in-progress: false
 
     steps:
       # ✅ 1. 调试 PAT_TOKEN
@@ -88,7 +83,16 @@ jobs:
             exit 1
           fi
 
-      # ✅ 8. 获取最新版本
+      # ✅ 8. 调试 REPO 变量
+      - name: Debug REPO variable
+        run: |
+          echo "REPO variable: ${{ matrix.repo }}"
+          if [ -z "${{ matrix.repo }}" ]; then
+            echo "❌ REPO variable is not set"
+            exit 1
+          fi
+
+      # ✅ 9. 获取最新版本
       - name: Check for new release
         id: check-release
         env:
@@ -100,7 +104,7 @@ jobs:
           echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."
           python check_release.py
 
-      # ✅ 9. 提交更新的 versions.json
+      # ✅ 10. 提交更新的 versions.json
       - name: Commit updated versions.json
         if: env.VERSION_UPDATED == 'true'
         run: |
@@ -132,15 +136,16 @@ jobs:
             exit 1
           fi
         env:
+          REPO: ${{ matrix.repo }}  # Ensure REPO is set for check_release.py rerun
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
-      # ✅ 10. 发送 GitHub Actions 通知
+      # ✅ 11. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
         if: env.VERSION_UPDATED == 'true'
         run: |
           echo "::notice title=SDK 更新通知::🚀 新版本: ${{ env.NEW_VERSION }} 🔗 [查看](${{ env.RELEASE_URL }}) 📦 SDK: ${{ env.SDK }}"
 
-      # ✅ 11. 发送邮件通知（如果需要）
+      # ✅ 12. 发送邮件通知（如果需要）
       - name: Send Email Notification
         if: env.VERSION_UPDATED == 'true'
         env:
@@ -159,7 +164,7 @@ jobs:
             echo "❌ SMTP 未配置，跳过邮件发送"
           fi
 
-      # ✅ 12. 发送 Telegram 通知
+      # ✅ 13. 发送 Telegram 通知
       - name: Send Telegram Notification
         if: env.VERSION_UPDATED == 'true'
         env:
