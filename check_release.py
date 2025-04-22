@@ -15,12 +15,19 @@ def normalize_version(version):
         version = version[:-2]
     # Strip pre-release or build metadata (e.g., -beta, +build)
     version = version.split('-')[0].split('+')[0]
-    # Remove prefixes like 'AdjustSDK' or 'release'
-    for prefix in ['AdjustSDK', 'release', 'Release']:
+    # Remove prefixes like 'AdjustSDK', 'release', 'sdk'
+    for prefix in ['AdjustSDK', 'release', 'Release', 'sdk', 'SDK']:
         if version.startswith(prefix):
             version = version[len(prefix):]
-    # Ensure version is numeric with dots
-    version = version.strip('.')
+    # Replace underscores or other separators with dots
+    version = version.replace('_', '.')
+    # Ensure version is numeric with dots, trim invalid characters
+    parts = [p for p in version.split('.') if p.isdigit()]
+    version = '.'.join(parts) if parts else version
+    # Fallback if version is still invalid
+    if not all(c.isdigit() or c == '.' for c in version):
+        print(f"⚠️ 版本号 {version} 仍无效，尝试提取数字")
+        version = ''.join(c for c in version if c.isdigit() or c == '.').strip('.')
     return version
 
 def fetch_remote_versions():
@@ -80,6 +87,9 @@ def main():
 
         releases = response.json()
         print(f"📋 获取到 {len(releases)} 个发布版本")
+        if not isinstance(releases, list):
+            print(f"❌ API 返回非列表数据: {releases}")
+            sys.exit(1)
         if not releases:
             print("❌ 该仓库没有发布版本")
             sys.exit(0)
@@ -89,10 +99,14 @@ def main():
         if not non_prereleases:
             print("无正式发布版本")
             sys.exit(0)
-        latest_release = sorted(non_prereleases, key=lambda x: x['published_at'], reverse=True)[0]
-        print(f"📄 最新发布数据: {json.dumps(latest_release, indent=2)}")
-        latest_version = latest_release['tag_name']
-        release_url = latest_release['html_url']
+        try:
+            latest_release = sorted(non_prereleases, key=lambda x: x['published_at'], reverse=True)[0]
+            print(f"📄 最新发布数据: {json.dumps(latest_release, indent=2)}")
+            latest_version = latest_release['tag_name']
+            release_url = latest_release['html_url']
+        except (KeyError, TypeError) as e:
+            print(f"❌ 发布数据格式错误: {e}")
+            sys.exit(1)
 
         remote_versions = fetch_remote_versions()
         local_versions = read_versions()
