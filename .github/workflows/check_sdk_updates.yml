@@ -5,7 +5,6 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
 
-# Move concurrency to the top level and use a unique group per workflow run
 concurrency:
   group: check-sdk-updates-${{ github.run_id }}
   cancel-in-progress: true
@@ -23,7 +22,6 @@ jobs:
           - "firebase/firebase-ios-sdk"
           - "adjust/adjust_signature_sdk"
 
-    # Add job-level concurrency to ensure one run per repo
     concurrency:
       group: check-sdk-updates-${{ matrix.repo }}-${{ github.workflow }}
       cancel-in-progress: true
@@ -39,10 +37,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: versions
-          key: sdk-versions-v3-${{ matrix.repo }}-${{ github.run_id }}
+          key: sdk-versions-v3-${{ matrix.repo }}
           restore-keys: |
             sdk-versions-v3-${{ matrix.repo }}-
-            sdk-versions-v3-${{ matrix.repo }}
             sdk-versions-v2-${{ matrix.repo }}-
             sdk-versions-v1-${{ matrix.repo }}-
             sdk-versions-${{ matrix.repo }}-
@@ -131,7 +128,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: versions
-          key: sdk-versions-v3-${{ matrix.repo }}-${{ github.run_id }}
+          key: sdk-versions-v3-${{ matrix.repo }}
 
       # ✅ 12. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
