@@ -70,6 +70,16 @@ jobs:
             echo "⚠️ 缓存未命中，将创建新的版本文件"
           fi
 
+      # ✅ 4.5. 临时步骤：将版本文件设置为旧版本以模拟新版本发布
+      - name: Simulate older version for testing
+        run: |
+          REPO_DIR="versions/$(echo ${{ matrix.repo }} | tr '/' '_')"
+          VERSION_FILE="$REPO_DIR/latest_version.txt"
+          mkdir -p "$REPO_DIR"
+          echo "11.11.0" > "$VERSION_FILE"
+          echo "✅ 已将版本文件设置为 11.11.0 以模拟新版本发布"
+          cat "$VERSION_FILE"
+
       # ✅ 5. 设置 Python 环境
       - name: Setup Python
         uses: actions/setup-python@v4
