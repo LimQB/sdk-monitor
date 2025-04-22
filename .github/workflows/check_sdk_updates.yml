@@ -29,8 +29,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: versions
-          key: sdk-versions-v2-${{ matrix.repo }}  # 更改为 v2 以使旧缓存失效
+          key: sdk-versions-v3-${{ matrix.repo }}  # 更改为 v3 以使旧缓存失效
           restore-keys: |
+            sdk-versions-v3-${{ matrix.repo }}-
             sdk-versions-v2-${{ matrix.repo }}-
             sdk-versions-v1-${{ matrix.repo }}-
             sdk-versions-${{ matrix.repo }}-
@@ -57,7 +58,7 @@ jobs:
       #         ;;
       #       "adjust/ios_sdk")
       #         echo "v4.38.2" > "$VERSION_FILE"  # 请替换为实际最新版本
-      #         echo "✅ 已将 adjust/ios_sdk 版本重置为 v4.38.2"
+      #         echo "✅ 已将 adjust/ios_sdk 版本重置为 v5.2.0"
       #         ;;
       #       "firebase/firebase-ios-sdk")
       #         echo "11.10.0" > "$VERSION_FILE"
@@ -174,3 +175,11 @@ jobs:
           else
             echo "❌ Telegram Token 或 Chat ID 未配置"
           fi
+
+      # ✅ 14. 保存版本文件到缓存（确保新版本被缓存）
+      - name: Save version files to cache after update
+        if: env.NEW_VERSION != ''
+        uses: actions/cache@v3
+        with:
+          path: versions
+          key: sdk-versions-v3-${{ matrix.repo }}  # 使用相同的 key 覆盖旧缓存
