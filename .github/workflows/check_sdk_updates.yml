@@ -27,32 +27,44 @@ jobs:
       cancel-in-progress: true
 
     steps:
-      # ✅ 1. 拉取代码仓库
+      # ✅ 1. 调试 PAT_TOKEN
+      - name: Debug PAT_TOKEN
+        run: |
+          if [ -n "${{ secrets.PAT_TOKEN }}" ]; then
+            echo "✅ PAT_TOKEN is set (first 5 chars): ${PAT_TOKEN:0:5}..."
+          else
+            echo "❌ PAT_TOKEN is not set"
+            exit 1
+          fi
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+
+      # ✅ 2. 拉取代码仓库
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.PAT_TOKEN }}  # Use PAT instead of GITHUB_TOKEN
+          token: ${{ secrets.PAT_TOKEN }}
 
-      # ✅ 2. 设置 Python 环境
+      # ✅ 3. 设置 Python 环境
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # ✅ 3. 安装必要的库
+      # ✅ 4. 安装必要的库
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade requests packaging setuptools
 
-      # ✅ 4. 调试 Python 环境
+      # ✅ 5. 调试 Python 环境
       - name: Verify installed dependencies
         run: |
           python --version
           pip --version
           pip list | grep packaging || echo "❌ packaging 未安装"
 
-      # ✅ 5. 验证 check_release.py 是否存在
+      # ✅ 6. 验证 check_release.py 是否存在
       - name: Verify check_release.py exists
         run: |
           ls -la
@@ -63,7 +75,7 @@ jobs:
             exit 1
           fi
 
-      # ✅ 6. 验证 versions.json 是否存在
+      # ✅ 7. 验证 versions.json 是否存在
       - name: Verify versions.json exists
         run: |
           if [ -f "versions.json" ]; then
@@ -74,19 +86,19 @@ jobs:
             exit 1
           fi
 
-      # ✅ 7. 获取最新版本
+      # ✅ 8. 获取最新版本
       - name: Check for new release
         id: check-release
         env:
           REPO: ${{ matrix.repo }}
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}  # Use PAT for API requests
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           echo "当前工作目录: $(pwd)"
           echo "环境变量 REPO: $REPO"
           echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."
           python check_release.py
 
-      # ✅ 8. 提交更新的 versions.json
+      # ✅ 9. 提交更新的 versions.json
       - name: Commit updated versions.json
         if: env.VERSION_UPDATED == 'true'
         run: |
@@ -96,15 +108,15 @@ jobs:
           git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }}"
           git push
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}  # Use PAT for pushing
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
-      # ✅ 9. 发送 GitHub Actions 通知
+      # ✅ 10. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
         if: env.VERSION_UPDATED == 'true'
         run: |
           echo "::notice title=SDK 更新通知::🚀 新版本: ${{ env.NEW_VERSION }} 🔗 [查看](${{ env.RELEASE_URL }}) 📦 SDK: ${{ env.SDK }}"
 
-      # ✅ 10. 发送邮件通知（如果需要）
+      # ✅ 11. 发送邮件通知（如果需要）
       - name: Send Email Notification
         if: env.VERSION_UPDATED == 'true'
         env:
@@ -123,7 +135,7 @@ jobs:
             echo "❌ SMTP 未配置，跳过邮件发送"
           fi
 
-      # ✅ 11. 发送 Telegram 通知
+      # ✅ 12. 发送 Telegram 通知
       - name: Send Telegram Notification
         if: env.VERSION_UPDATED == 'true'
         env:
