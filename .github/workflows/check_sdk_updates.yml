@@ -83,6 +83,9 @@ jobs:
             exit 1
           fi
 
+      - name: Delay to avoid rate limits
+        run: sleep $((RANDOM % 10))
+
       - name: Check for new release
         id: check-release
         env:
@@ -144,6 +147,9 @@ jobs:
           else
             echo "⚠️ versions.json 不存在，无需还原"
           fi
+        env:
+          REPO: ${{ matrix.repo }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       - name: Send GitHub Notification
         if: env.VERSION_UPDATED == 'true'
