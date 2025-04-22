@@ -2,6 +2,7 @@ import requests
 import os
 import sys
 import traceback
+import json
 from packaging.version import parse as parse_version
 
 def normalize_version(version):
@@ -10,6 +11,18 @@ def normalize_version(version):
     while version.endswith('.0'):
         version = version[:-2]
     return version
+
+def read_versions():
+    version_file = "versions.json"
+    if os.path.exists(version_file):
+        with open(version_file, "r") as f:
+            return json.load(f)
+    return {}
+
+def write_versions(versions):
+    with open("versions.json", "w") as f:
+        json.dump(versions, f, indent=2)
+    print("✅ 已更新 versions.json 文件")
 
 def main():
     try:
@@ -45,31 +58,15 @@ def main():
         latest_version = latest_release['tag_name']
         release_url = latest_release['html_url']
 
-        # 版本存储目录，按仓库分隔
-        version_dir = os.path.join("versions", REPO.replace("/", "_"))
-        os.makedirs(version_dir, exist_ok=True)
-        version_file = os.path.join(version_dir, "latest_version.txt")
-        print(f"📂 版本文件路径: {version_file}")
-        print(f"📂 当前工作目录: {os.getcwd()}")
-
-        saved_version = None
-        if os.path.exists(version_file):
-            with open(version_file, "r") as f:
-                saved_version = f.read().strip()
-            print(f"📖 从文件读取的本地版本: {saved_version}")
-        else:
-            print("📖 本地版本文件不存在，将进行首次初始化")
+        # 读取 versions.json
+        versions = read_versions()
+        repo_key = REPO.replace("/", "_")
+        saved_version = versions.get(repo_key)
 
         if not saved_version:
             print(f"📌 初次运行，记录最新版本: {latest_version}")
-            with open(version_file, "w") as f:
-                f.write(latest_version)
-            if os.path.exists(version_file):
-                with open(version_file, "r") as f:
-                    written_version = f.read().strip()
-                print(f"✅ 首次写入成功，确认版本: {written_version}")
-            else:
-                print("❌ 首次写入失败，文件未创建")
+            versions[repo_key] = latest_version
+            write_versions(versions)
             sys.exit(0)
 
         current_ver = parse_version(normalize_version(saved_version))
@@ -80,24 +77,14 @@ def main():
 
         if latest_ver > current_ver:
             print(f"🎉 发现新版本: {latest_version}")
-            try:
-                with open(version_file, "w") as f:
-                    f.write(latest_version)
-                if os.path.exists(version_file):
-                    with open(version_file, "r") as f:
-                        written_version = f.read().strip()
-                    print(f"✅ 更新本地版本成功，确认版本: {written_version}")
-                else:
-                    print("❌ 更新本地版本失败，文件未创建")
-            except Exception as e:
-                print(f"❌ 写入版本文件失败: {e}")
-                traceback.print_exc()
-                sys.exit(1)
+            versions[repo_key] = latest_version
+            write_versions(versions)
 
             with open(os.environ['GITHUB_ENV'], 'a') as env_file:
                 env_file.write(f"NEW_VERSION={latest_version}\n")
                 env_file.write(f"RELEASE_URL={release_url}\n")
                 env_file.write(f"SDK={REPO}\n")
+                env_file.write("VERSION_UPDATED=true\n")
         else:
             print(f"✅ 当前已是最新版本: {latest_version}")
 
