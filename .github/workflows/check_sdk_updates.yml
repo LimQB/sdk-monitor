@@ -5,8 +5,9 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
 
+# Move concurrency to the top level and use a unique group per workflow run
 concurrency:
-  group: check-sdk-updates-${{ matrix.repo }}
+  group: check-sdk-updates-${{ github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -21,6 +22,11 @@ jobs:
           - "adjust/ios_sdk"
           - "firebase/firebase-ios-sdk"
           - "adjust/adjust_signature_sdk"
+
+    # Add job-level concurrency to ensure one run per repo
+    concurrency:
+      group: check-sdk-updates-${{ matrix.repo }}-${{ github.workflow }}
+      cancel-in-progress: true
 
     steps:
       # ✅ 1. 拉取代码仓库
