@@ -5,7 +5,6 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
 
-# Serialize all matrix jobs to prevent push conflicts
 concurrency:
   group: check-sdk-updates
   cancel-in-progress: false
@@ -115,9 +114,17 @@ jobs:
             fi
             echo "Push failed, retrying ($i/3)..."
             git fetch origin
-            git pull --rebase
-            git add versions.json
-            git commit --allow-empty -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }} after failed push"
+            if git pull --rebase; then
+              git add versions.json
+              git commit --allow-empty -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }} after failed push"
+            else
+              echo "⚠️ Rebase 失败，重置到最新 main 分支"
+              git rebase --abort || true
+              git reset --hard origin/main
+              python check_release.py
+              git add versions.json
+              git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }} after failed push"
+            fi
             sleep $((i * 5))
           done
           if [ "$success" != "true" ]; then
@@ -131,8 +138,12 @@ jobs:
       - name: Revert versions.json on failure
         if: failure()
         run: |
-          git checkout -- versions.json
-          echo "✅ Reverted versions.json due to job failure"
+          if [ -f "versions.json" ]; then
+            git checkout -- versions.json || echo "⚠️ 无法还原 versions.json"
+            echo "✅ Reverted versions.json due to job failure"
+          else
+            echo "⚠️ versions.json 不存在，无需还原"
+          fi
 
       - name: Send GitHub Notification
         if: env.VERSION_UPDATED == 'true'
