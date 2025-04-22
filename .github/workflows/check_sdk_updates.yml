@@ -2,8 +2,8 @@ name: Check SDK Updates
 
 on:
   schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
+    - cron: '0 * * * *' # 每小时执行一次
+  workflow_dispatch: # 支持手动触发
 
 concurrency:
   group: check-sdk-updates
@@ -12,18 +12,19 @@ concurrency:
 jobs:
   check-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 30 # 设置超时时间为 30 分钟
     strategy:
       fail-fast: false
       matrix:
         repo:
-          - "facebook/facebook-ios-sdk"
-          - "adjust/ios_sdk"
-          - "firebase/firebase-ios-sdk"
-          - "adjust/adjust_signature_sdk"
+          - "facebook/facebook-ios-sdk"        # Facebook SDK
+          - "adjust/ios_sdk"                   # Adjust SDK
+          - "firebase/firebase-ios-sdk"        # Firebase SDK
+          - "adjust/adjust_signature_sdk"      # Adjust Signature SDK
       max-parallel: 1
 
     steps:
+      # ✅ 1. 验证 PAT_TOKEN 是否存在
       - name: Debug PAT_TOKEN
         run: |
           if [ -n "${{ secrets.PAT_TOKEN }}" ]; then
@@ -35,27 +36,32 @@ jobs:
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
 
+      # ✅ 2. 拉取代码仓库
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
 
+      # ✅ 3. 设置 Python 环境
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
+      # ✅ 4. 安装必要的库
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade requests packaging setuptools
 
+      # ✅ 5. 调试 Python 环境
       - name: Verify installed dependencies
         run: |
           python --version
           pip --version
           pip list | grep packaging || echo "❌ packaging 未安装"
 
+      # ✅ 6. 验证 check_release.py 是否存在
       - name: Verify check_release.py exists
         run: |
           ls -la
@@ -66,6 +72,7 @@ jobs:
             exit 1
           fi
 
+      # ✅ 7. 验证 versions.json 是否存在
       - name: Verify versions.json exists
         run: |
           if [ -f "versions.json" ]; then
@@ -76,6 +83,7 @@ jobs:
             exit 1
           fi
 
+      # ✅ 8. 验证 REPO 变量是否存在
       - name: Debug REPO variable
         run: |
           echo "REPO variable: ${{ matrix.repo }}"
@@ -84,9 +92,11 @@ jobs:
             exit 1
           fi
 
+      # ✅ 9. 延迟以避免速率限制
       - name: Delay to avoid rate limits
         run: sleep $((RANDOM % 10))
 
+      # ✅ 10. 获取SDK最新版本
       - name: Check for new release
         id: check-release
         env:
@@ -98,6 +108,7 @@ jobs:
           echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."
           python check_release.py
 
+      # ✅ 11. 提交已更新的 versions.json
       - name: Commit updated versions.json
         if: env.VERSION_UPDATED == 'true'
         run: |
@@ -137,6 +148,7 @@ jobs:
           REPO: ${{ matrix.repo }}
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
+      # ✅ 12. 失败时恢复versions.json
       - name: Revert versions.json on failure
         if: failure()
         run: |
@@ -150,11 +162,13 @@ jobs:
           REPO: ${{ matrix.repo }}
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
+      # ✅ 13. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
         if: env.VERSION_UPDATED == 'true'
         run: |
           echo "::warning title=SDK 更新通知::🚀 新版本: ${{ env.NEW_VERSION }} 🔗 [查看](${{ env.RELEASE_URL }}) 📦 SDK: ${{ env.SDK }}"
 
+      # ✅ 14. 发送邮件通知（如果需要）
       - name: Send Email Notification
         if: env.VERSION_UPDATED == 'true'
         env:
@@ -181,6 +195,7 @@ jobs:
             echo "TO_EMAIL: $TO_EMAIL"
           fi
 
+      # ✅ 15. 发送 Telegram 通知  
       - name: Send Telegram Notification
         if: env.VERSION_UPDATED == 'true'
         env:
@@ -189,7 +204,10 @@ jobs:
         run: |
           if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
             echo "📬 Sending Telegram notification..."
-            MESSAGE="🚀 *新版本发布*\n📦 SDK: \`${SDK}\`\n🔖 版本号: \`${NEW_VERSION}\`\n🔗 [点击查看](${RELEASE_URL})"
+            MESSAGE="🚀 *新版本发布*
+                📦 SDK: \`${SDK}\`
+                🔖 版本号: \`${NEW_VERSION}\`
+                🔗 [点击查看](${RELEASE_URL})"
             JSON=$(jq -n --arg chat_id "$TELEGRAM_CHAT_ID" --arg text "$MESSAGE" '{chat_id: $chat_id, text: $text, parse_mode: "Markdown"}')
             RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
               -H "Content-Type: application/json" \
