@@ -22,9 +22,10 @@ jobs:
           - "firebase/firebase-ios-sdk"
           - "adjust/adjust_signature_sdk"
 
+    # Serialize the commit and push operations for all matrix jobs
     concurrency:
-      group: check-sdk-updates-${{ matrix.repo }}-${{ github.workflow }}
-      cancel-in-progress: true
+      group: check-sdk-updates-commit-${{ github.workflow }}  # Ensure sequential commits
+      cancel-in-progress: false
 
     steps:
       # ✅ 1. 调试 PAT_TOKEN
@@ -104,6 +105,7 @@ jobs:
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
+          git pull --rebase origin main  # Fetch and rebase to avoid conflicts
           git add versions.json
           git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }}"
           git push
@@ -121,7 +123,7 @@ jobs:
         if: env.VERSION_UPDATED == 'true'
         env:
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
