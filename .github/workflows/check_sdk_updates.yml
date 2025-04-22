@@ -153,7 +153,7 @@ jobs:
       - name: Send GitHub Notification
         if: env.VERSION_UPDATED == 'true'
         run: |
-          echo "::notice title=SDK 更新通知::🚀 新版本: ${{ env.NEW_VERSION }} 🔗 [查看](${{ env.RELEASE_URL }}) 📦 SDK: ${{ env.SDK }}"
+          echo "::warning title=SDK 更新通知::🚀 新版本: ${{ env.NEW_VERSION }} 🔗 [查看](${{ env.RELEASE_URL }}) 📦 SDK: ${{ env.SDK }}"
 
       - name: Send Email Notification
         if: env.VERSION_UPDATED == 'true'
@@ -164,34 +164,43 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
         run: |
-          if [ -n "$SMTP_SERVER" ]; then
-            echo "Sending email notification..."
+          if [ -n "$SMTP_SERVER" ] && [ -n "$SMTP_PORT" ] && [ -n "$SMTP_USER" ] && [ -n "$SMTP_PASSWORD" ] && [ -n "$TO_EMAIL" ]; then
+            echo "📧 Sending email notification..."
             SUBJECT="SDK 更新: $SDK $NEW_VERSION"
             BODY="新版本发布: $SDK\n\n版本号: $NEW_VERSION\n下载链接: $RELEASE_URL"
-            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v $TO_EMAIL || echo "❌ 邮件发送失败"
+            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v -f "$SMTP_USER" -s "$SMTP_SERVER:$SMTP_PORT" -xu "$SMTP_USER" -xp "$SMTP_PASSWORD" "$TO_EMAIL" && {
+              echo "✅ Email 通知已发送"
+            } || {
+              echo "❌ Email 通知发送失败"
+            }
           else
-            echo "❌ SMTP 未配置，跳过邮件发送"
+            echo "❌ SMTP 配置不完整，跳过邮件发送"
+            echo "SMTP_SERVER: $SMTP_SERVER"
+            echo "SMTP_PORT: $SMTP_PORT"
+            echo "SMTP_USER: $SMTP_USER"
+            echo "TO_EMAIL: $TO_EMAIL"
           fi
 
       - name: Send Telegram Notification
         if: env.VERSION_UPDATED == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TO_EMAIL }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
-            MESSAGE="""🚀 *新版本发布*
-            📦 SDK: \`${SDK}\`
-            🔖 版本号: \`${NEW_VERSION}\`
-            🔗 [点击查看](${RELEASE_URL})"""
-            
+            echo "📬 Sending Telegram notification..."
+            MESSAGE="🚀 *新版本发布*\n📦 SDK: \`${SDK}\`\n🔖 版本号: \`${NEW_VERSION}\`\n🔗 [点击查看](${RELEASE_URL})"
             JSON=$(jq -n --arg chat_id "$TELEGRAM_CHAT_ID" --arg text "$MESSAGE" '{chat_id: $chat_id, text: $text, parse_mode: "Markdown"}')
-
-            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
               -H "Content-Type: application/json" \
-              -d "$JSON"
-
-            echo "✅ Telegram 通知已发送"
+              -d "$JSON")
+            if echo "$RESPONSE" | jq -e '.ok' > /dev/null; then
+              echo "✅ Telegram 通知已发送"
+            else
+              echo "❌ Telegram 通知发送失败: $(echo "$RESPONSE" | jq -r '.description')"
+            fi
           else
             echo "❌ Telegram Token 或 Chat ID 未配置"
+            echo "TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:0:5}..."
+            echo "TELEGRAM_CHAT_ID: $TELEGRAM_CHAT_ID"
           fi
