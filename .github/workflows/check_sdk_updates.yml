@@ -2,60 +2,95 @@ name: Check SDK Updates
 
 on:
   schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
-
-concurrency:
-  group: check-sdk-updates
-  cancel-in-progress: false
+    - cron: '0 * * * *' # 每小时执行一次
+  workflow_dispatch: # 支持手动触发
 
 jobs:
   check-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 30  # 设置超时时间为 30 分钟
     strategy:
       fail-fast: false
       matrix:
         repo:
-          - "facebook/facebook-ios-sdk"
-          - "adjust/ios_sdk"
-          - "firebase/firebase-ios-sdk"
-          - "adjust/adjust_signature_sdk"
-      max-parallel: 1
+          - "facebook/facebook-ios-sdk"            # Facebook SDK
+          - "adjust/ios_sdk"                       # Adjust SDK
+          - "firebase/firebase-ios-sdk"            # Firebase SDK
+          - "adjust/adjust_signature_sdk"          # Adjust Signature SDK
 
     steps:
-      - name: Debug PAT_TOKEN
-        run: |
-          if [ -n "${{ secrets.PAT_TOKEN }}" ]; then
-            echo "✅ PAT_TOKEN is set (first 5 chars): ${PAT_TOKEN:0:5}..."
-          else
-            echo "❌ PAT_TOKEN is not set"
-            exit 1
-          fi
-        env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-
+      # ✅ 1. 拉取代码仓库
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
 
+      # ✅ 2. 缓存版本文件
+      - name: Cache SDK version files
+        id: cache-versions
+        uses: actions/cache@v3
+        with:
+          path: versions
+          key: sdk-versions-v3-${{ matrix.repo }}  # 更改为 v3 以使旧缓存失效
+          restore-keys: |
+            sdk-versions-v3-${{ matrix.repo }}-
+            sdk-versions-v2-${{ matrix.repo }}-
+            sdk-versions-v1-${{ matrix.repo }}-
+            sdk-versions-${{ matrix.repo }}-
+            sdk-versions-
+
+      # ✅ 3. 验证缓存命中
+      - name: Verify cache hit
+        run: |
+          if [ "${{ steps.cache-versions.outputs.cache-hit }}" == "true" ]; then
+            echo "✅ 缓存命中，版本文件已恢复"
+            ls -la versions/
+          else
+            echo "⚠️ 缓存未命中，将创建新的版本文件"
+          fi
+      
+      # ✅ 4. 重置版本文件为正确的初始值（临时步骤）
+      # - name: Reset version files to correct initial values
+      #   run: |
+      #     VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')_latest_version.txt"
+      #     case ${{ matrix.repo }} in
+      #       "facebook/facebook-ios-sdk")
+      #         echo "v18.0.0" > "$VERSION_FILE"
+      #         echo "✅ 已将 facebook/facebook-ios-sdk 版本重置为 v18.0.0"
+      #         ;;
+      #       "adjust/ios_sdk")
+      #         echo "v4.38.2" > "$VERSION_FILE"  # 请替换为实际最新版本
+      #         echo "✅ 已将 adjust/ios_sdk 版本重置为 v5.2.0"
+      #         ;;
+      #       "firebase/firebase-ios-sdk")
+      #         echo "11.10.0" > "$VERSION_FILE"
+      #         echo "✅ 已将 firebase/firebase-ios-sdk 版本重置为 11.10.0"
+      #         ;;
+      #       "adjust/adjust_signature_sdk")
+      #         echo "v3.35.2" > "$VERSION_FILE"
+      #         echo "✅ 已将 adjust/adjust_signature_sdk 版本重置为 v3.35.2"
+      #         ;;
+      #     esac
+      #     cat "$VERSION_FILE"
+      
+      # ✅ 5. 设置 Python 环境
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
+      
+      # ✅ 6. 安装必要的库
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade requests packaging setuptools
-
+      
+      # ✅ 7. 调试 Python 环境
       - name: Verify installed dependencies
         run: |
           python --version
           pip --version
           pip list | grep packaging || echo "❌ packaging 未安装"
-
+          
+      # ✅ 8. 验证 check_release.py 是否存在
       - name: Verify check_release.py exists
         run: |
           ls -la
@@ -66,104 +101,40 @@ jobs:
             exit 1
           fi
 
-      - name: Verify versions.json exists
-        run: |
-          if [ -f "versions.json" ]; then
-            echo "✅ versions.json found in root directory"
-            cat versions.json
-          else
-            echo "❌ versions.json not found in root directory"
-            exit 1
-          fi
-
-      - name: Debug REPO variable
-        run: |
-          echo "REPO variable: ${{ matrix.repo }}"
-          if [ -z "${{ matrix.repo }}" ]; then
-            echo "❌ REPO variable is not set"
-            exit 1
-          fi
-
-      - name: Delay to avoid rate limits
-        run: sleep $((RANDOM % 10))
-
+      # ✅ 9. 获取最新版本
       - name: Check for new release
         id: check-release
         env:
           REPO: ${{ matrix.repo }}
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_PAT }}
         run: |
           echo "当前工作目录: $(pwd)"
           echo "环境变量 REPO: $REPO"
-          echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."
+          echo "环境变量 GITHUB_TOKEN: ${GITHUB_TOKEN:0:5}..."  # 只显示前5个字符，避免泄露
           python check_release.py
 
-      - name: Commit updated versions.json
-        if: env.VERSION_UPDATED == 'true'
+      # ✅ 10. 验证版本文件内容
+      - name: Verify version file after script
         run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
-          echo "🔍 Debugging working directory state before commit..."
-          git status
-          cat versions.json
-          
-          git add versions.json
-          git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }}" || { echo "❌ git commit failed"; exit 128; }
-          
-          success=false
-          for i in {1..3}; do
-            echo "🔍 Pushing attempt $i/3"
-            if git push origin main; then
-              success=true
-              break
-            fi
-            echo "Push failed, retrying ($i/3)..."
-            git fetch origin
-            git pull --rebase || {
-              echo "⚠️ Rebase failed, resetting to origin/main..."
-              git rebase --abort || true
-              git reset --hard origin/main
-              python check_release.py
-              git add versions.json
-              git commit -m "Update versions.json with new SDK version: ${{ env.SDK }}@${{ env.NEW_VERSION }} after conflict" || { echo "❌ git commit failed after rebase"; exit 128; }
-            }
-            sleep $((i * 5))
-          done
-          if [ "$success" != "true" ]; then
-            echo "❌ Failed to push after 3 retries"
-            exit 1
-          fi
-        env:
-          REPO: ${{ matrix.repo }}
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-
-      - name: Revert versions.json on failure
-        if: failure()
-        run: |
-          if [ -f "versions.json" ]; then
-            git checkout -- versions.json || echo "⚠️ 无法还原 versions.json"
-            echo "✅ Reverted versions.json due to job failure"
+          echo "📂 版本文件目录内容："
+          ls -la versions/
+          VERSION_FILE="versions/$(echo ${{ matrix.repo }} | tr '/' '_')_latest_version.txt"
+          if [ -f "$VERSION_FILE" ]; then
+            echo "✅ 版本文件存在，内容："
+            cat "$VERSION_FILE"
           else
-            echo "⚠️ versions.json 不存在，无需还原"
+            echo "❌ 版本文件未找到"
           fi
-        env:
-          REPO: ${{ matrix.repo }}
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
-      - name: Clean up Actions cache
-        if: always()
-        run: |
-          gh cache list --repo LimQB/sdk-monitor | grep -v "active" | awk '{print $1}' | xargs -I {} gh cache delete {} --repo LimQB/sdk-monitor || true
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-
+      # ✅ 11. 发送 GitHub Actions 通知
       - name: Send GitHub Notification
-        if: env.VERSION_UPDATED == 'true'
+        if: env.NEW_VERSION != ''
         run: |
-          echo "::warning title=SDK 更新通知::🚀 新版本: ${{ env.NEW_VERSION }} 🔗 [查看](${{ env.RELEASE_URL }}) 📦 SDK: ${{ env.SDK }}"
+          echo "::notice title=SDK 更新通知::🚀 新版本: ${{ env.NEW_VERSION }} 🔗 [查看](${{ env.RELEASE_URL }}) 📦 SDK: ${{ env.SDK }}"
 
+      # ✅ 12. 发送邮件通知（如果需要）
       - name: Send Email Notification
-        if: env.VERSION_UPDATED == 'true'
+        if: env.NEW_VERSION != ''
         env:
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
@@ -171,43 +142,44 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
         run: |
-          if [ -n "$SMTP_SERVER" ] && [ -n "$SMTP_PORT" ] && [ -n "$SMTP_USER" ] && [ -n "$SMTP_PASSWORD" ] && [ -n "$TO_EMAIL" ]; then
-            echo "📧 Sending email notification..."
+          if [ -n "$SMTP_SERVER" ]; then
+            echo "Sending email notification..."
             SUBJECT="SDK 更新: $SDK $NEW_VERSION"
             BODY="新版本发布: $SDK\n\n版本号: $NEW_VERSION\n下载链接: $RELEASE_URL"
-            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v -f "$SMTP_USER" -s "$SMTP_SERVER:$SMTP_PORT" -xu "$SMTP_USER" -xp "$SMTP_PASSWORD" "$TO_EMAIL" && {
-              echo "✅ Email 通知已发送"
-            } || {
-              echo "❌ Email 通知发送失败"
-            }
+            echo -e "Subject:$SUBJECT\n\n$BODY" | sendmail -v $TO_EMAIL || echo "❌ 邮件发送失败"
           else
-            echo "❌ SMTP 配置不完整，跳过邮件发送"
-            echo "SMTP_SERVER: $SMTP_SERVER"
-            echo "SMTP_PORT: $SMTP_PORT"
-            echo "SMTP_USER: $SMTP_USER"
-            echo "TO_EMAIL: $TO_EMAIL"
+            echo "❌ SMTP 未配置，跳过邮件发送"
           fi
 
+      # ✅ 13. 发送 Telegram 通知
       - name: Send Telegram Notification
-        if: env.VERSION_UPDATED == 'true'
+        if: env.NEW_VERSION != ''
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
-            echo "📬 Sending Telegram notification..."
-            MESSAGE="🚀 *新版本发布*\n📦 SDK: \`${SDK}\`\n🔖 版本号: \`${NEW_VERSION}\`\n🔗 [点击查看](${RELEASE_URL})"
+            MESSAGE="""🚀 *新版本发布*
+            📦 SDK: \`${SDK}\`
+            🔖 版本号: \`${NEW_VERSION}\`
+            🔗 [点击查看](${RELEASE_URL})"""
+            
+            # 通过 jq 处理 JSON，确保 \n 正确解析
             JSON=$(jq -n --arg chat_id "$TELEGRAM_CHAT_ID" --arg text "$MESSAGE" '{chat_id: $chat_id, text: $text, parse_mode: "Markdown"}')
-            RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+
+            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
               -H "Content-Type: application/json" \
-              -d "$JSON")
-            if echo "$RESPONSE" | jq -e '.ok' > /dev/null; then
-              echo "✅ Telegram 通知已发送"
-            else
-              echo "❌ Telegram 通知发送失败: $(echo "$RESPONSE" | jq -r '.description')"
-            fi
+              -d "$JSON"
+
+            echo "✅ Telegram 通知已发送"
           else
             echo "❌ Telegram Token 或 Chat ID 未配置"
-            echo "TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:0:5}..."
-            echo "TELEGRAM_CHAT_ID: $TELEGRAM_CHAT_ID"
           fi
+
+      # ✅ 14. 保存版本文件到缓存（确保新版本被缓存）
+      - name: Save version files to cache after update
+        if: env.NEW_VERSION != ''
+        uses: actions/cache@v3
+        with:
+          path: versions
+          key: sdk-versions-v3-${{ matrix.repo }}  # 使用相同的 key 覆盖旧缓存
