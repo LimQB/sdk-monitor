@@ -2,16 +2,62 @@ import requests
 import os
 import sys
 import traceback
+import json
 from packaging.version import parse as parse_version
+import subprocess
 
 def normalize_version(version):
-    # 去掉前缀 v 或 V
+    # Remove leading 'v' or 'V'
     if version.startswith(('v', 'V')):
         version = version[1:]
-    # 去掉末尾的 .0
+    # Remove trailing '.0'
     while version.endswith('.0'):
         version = version[:-2]
+    # Strip pre-release or build metadata (e.g., -beta, +build)
+    version = version.split('-')[0].split('+')[0]
+    # Remove prefixes like 'AdjustSDK', 'release', 'sdk'
+    for prefix in ['AdjustSDK', 'release', 'Release', 'sdk', 'SDK']:
+        if version.startswith(prefix):
+            version = version[len(prefix):]
+    # Replace underscores or other separators with dots
+    version = version.replace('_', '.')
+    # Ensure version is numeric with dots, trim invalid characters
+    parts = [p for p in version.split('.') if p.isdigit()]
+    version = '.'.join(parts) if parts else version
+    # Fallback if version is still invalid
+    if not all(c.isdigit() or c == '.' for c in version):
+        print(f"⚠️ 版本号 {version} 仍无效，尝试提取数字")
+        version = ''.join(c for c in version if c.isdigit() or c == '.').strip('.')
     return version
+
+def fetch_remote_versions():
+    try:
+        subprocess.run(["git", "fetch", "origin", "main"], check=True)
+        result = subprocess.run(
+            ["git", "show", "origin/main:versions.json"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return json.loads(result.stdout)
+    except subprocess.CalledProcessError:
+        print("⚠️ Could not fetch remote versions.json, assuming empty file")
+        return {}
+    except json.JSONDecodeError:
+        print("⚠️ Remote versions.json is invalid, assuming empty file")
+        return {}
+
+def read_versions():
+    version_file = "versions.json"
+    if os.path.exists(version_file):
+        with open(version_file, "r") as f:
+            return json.load(f)
+    return {}
+
+def write_versions(versions):
+    with open("versions.json", "w") as f:
+        json.dump(versions, f, indent=2)
+    print("✅ 已更新 versions.json 文件")
 
 def main():
     try:
@@ -28,85 +74,91 @@ def main():
         if github_token:
             headers["Authorization"] = f"token {github_token}"
 
+        print(f"📡 请求 API: {API_URL}")
         response = requests.get(API_URL, headers=headers, timeout=10)
+        if response.status_code == 403 and 'X-RateLimit-Remaining' in response.headers:
+            if int(response.headers['X-RateLimit-Remaining']) == 0:
+                print(f"❌ GitHub API 速率限制已用尽，剩余: {response.headers['X-RateLimit-Remaining']}")
+                sys.exit(1)
         if response.status_code != 200:
             print(f"❌ 请求失败，状态码: {response.status_code}")
             print(f"错误信息: {response.text}")
             sys.exit(1)
 
         releases = response.json()
+        print(f"📋 获取到 {len(releases)} 个发布版本")
+        if not isinstance(releases, list):
+            print(f"❌ API 返回非列表数据: {releases}")
+            sys.exit(1)
         if not releases:
             print("❌ 该仓库没有发布版本")
             sys.exit(0)
 
-        # 获取最新正式发布版本
         non_prereleases = [r for r in releases if not r.get('prerelease', False)]
+        print(f"📋 找到 {len(non_prereleases)} 个非预发布版本")
         if not non_prereleases:
             print("无正式发布版本")
             sys.exit(0)
-        latest_release = sorted(non_prereleases, key=lambda x: x['published_at'], reverse=True)[0]
-        latest_version = latest_release['tag_name']
-        release_url = latest_release['html_url']
+        try:
+            latest_release = sorted(non_prereleases, key=lambda x: x['published_at'], reverse=True)[0]
+            print(f"📄 最新发布数据: {json.dumps(latest_release, indent=2)}")
+            latest_version = latest_release['tag_name']
+            release_url = latest_release['html_url']
+        except (KeyError, TypeError) as e:
+            print(f"❌ 发布数据格式错误: {e}")
+            sys.exit(1)
 
-        # 版本存储目录
-        version_dir = "versions"
-        os.makedirs(version_dir, exist_ok=True)
-        version_file = os.path.join(version_dir, REPO.replace("/", "_") + "_latest_version.txt")
-        print(f"📂 版本文件路径: {version_file}")
-        print(f"📂 当前工作目录: {os.getcwd()}")
+        remote_versions = fetch_remote_versions()
+        local_versions = read_versions()
+        versions = remote_versions.copy()
+        versions.update(local_versions)
 
-        saved_version = None
-        if os.path.exists(version_file):
-            with open(version_file, "r") as f:
-                saved_version = f.read().strip()
-            print(f"📖 从文件读取的本地版本: {saved_version}")
-        else:
-            print("📖 本地版本文件不存在，将进行首次初始化")
+        repo_key = REPO.replace("/", "_")
+        saved_version = versions.get(repo_key)
 
-        # 首次运行时记录最新版本，不触发通知
         if not saved_version:
             print(f"📌 初次运行，记录最新版本: {latest_version}")
-            with open(version_file, "w") as f:
-                f.write(latest_version)
-            # 确认写入是否成功
-            if os.path.exists(version_file):
-                with open(version_file, "r") as f:
-                    written_version = f.read().strip()
-                print(f"✅ 首次写入成功，确认版本: {written_version}")
-            else:
-                print("❌ 首次写入失败，文件未创建")
+            versions[repo_key] = latest_version
+            try:
+                with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+                    env_file.write(f"NEW_VERSION={latest_version}\n")
+                    env_file.write(f"RELEASE_URL={release_url}\n")
+                    env_file.write(f"SDK={REPO}\n")
+                    env_file.write("VERSION_UPDATED=true\n")
+                write_versions(versions)
+            except Exception as e:
+                print(f"❌ 无法设置环境变量: {e}")
+                sys.exit(1)
             sys.exit(0)
 
-        # 版本号比较
-        current_ver = parse_version(normalize_version(saved_version))
-        latest_ver = parse_version(normalize_version(latest_version))
-        print(f"✈️ 获取的最新版本: {latest_version}")
-        print(f"🚘 本地记录的版本: {saved_version}")
+        print(f"原始保存版本: {saved_version}")
+        print(f"原始最新版本: {latest_version}")
+        norm_saved = normalize_version(saved_version)
+        norm_latest = normalize_version(latest_version)
+        print(f"规范化保存版本: {norm_saved}")
+        print(f"规范化最新版本: {norm_latest}")
+        try:
+            current_ver = parse_version(norm_saved)
+            latest_ver = parse_version(norm_latest)
+        except packaging.version.InvalidVersion as e:
+            print(f"❌ 无效版本号: saved_version={saved_version}, latest_version={latest_version}, 错误: {e}")
+            sys.exit(1)
+
         print(f"🔍 版本比较: {latest_ver} > {current_ver} = {latest_ver > current_ver}")
 
         if latest_ver > current_ver:
             print(f"🎉 发现新版本: {latest_version}")
-            # 更新本地版本文件
+            versions[repo_key] = latest_version
             try:
-                with open(version_file, "w") as f:
-                    f.write(latest_version)
-                # 确认写入是否成功
-                if os.path.exists(version_file):
-                    with open(version_file, "r") as f:
-                        written_version = f.read().strip()
-                    print(f"✅ 更新本地版本成功，确认版本: {written_version}")
-                else:
-                    print("❌ 更新本地版本失败，文件未创建")
+                with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+                    env_file.write(f"NEW_VERSION={latest_version}\n")
+                    env_file.write(f"RELEASE_URL={release_url}\n")
+                    env_file.write(f"SDK={REPO}\n")
+                    env_file.write("VERSION_UPDATED=true\n")
+                write_versions(versions)
             except Exception as e:
-                print(f"❌ 写入版本文件失败: {e}")
-                traceback.print_exc()
+                print(f"❌ 无法设置环境变量: {e}")
                 sys.exit(1)
-
-            # 写入 GitHub Actions 环境变量
-            with open(os.environ['GITHUB_ENV'], 'a') as env_file:
-                env_file.write(f"NEW_VERSION={latest_version}\n")
-                env_file.write(f"RELEASE_URL={release_url}\n")
-                env_file.write(f"SDK={REPO}\n")
         else:
             print(f"✅ 当前已是最新版本: {latest_version}")
 
